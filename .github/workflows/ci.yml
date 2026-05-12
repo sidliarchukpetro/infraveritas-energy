@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  forge-test:
+    name: Forge build and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Show versions
+        run: forge --version
+
+      - name: Forge build
+        run: forge build --sizes
+        working-directory: contracts
+
+      - name: Forge test
+        run: forge test -vvv
+        working-directory: contracts
+        continue-on-error: true
+
+  slither:
+    name: Slither static analysis
+    runs-on: ubuntu-latest
+    needs: forge-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Install Slither
+        run: pip install slither-analyzer==0.11.5
+
+      - name: Forge build for Slither
+        run: forge build
+        working-directory: contracts
+
+      - name: Run Slither on EnergyProofRegistry
+        run: slither src/EnergyProofRegistry.sol --config-file slither.config.json
+        working-directory: contracts
+        continue-on-error: true
