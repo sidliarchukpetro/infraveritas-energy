@@ -1,21 +1,21 @@
 'forge clean' running (wd: /home/ppbar/projects/infraveritas-energy/contracts)
 'forge config --json' running
-'forge build --build-info src/EnergyProofRegistry.sol' running (wd: /home/ppbar/projects/infraveritas-energy/contracts)
+'forge build --build-info legacy/v2/EnergyProofRegistry.sol' running (wd: /home/ppbar/projects/infraveritas-energy/contracts)
 INFO:Detectors:
 Detector: incorrect-equality
-EnergyProofRegistry.isOnline(uint256) (src/EnergyProofRegistry.sol#124-127) uses a dangerous strict equality:
-	- lastEpochTimestamp[deviceId] == 0 (src/EnergyProofRegistry.sol#125)
+EnergyProofRegistry.isOnline(uint256) (legacy/v2/EnergyProofRegistry.sol#124-127) uses a dangerous strict equality:
+	- lastEpochTimestamp[deviceId] == 0 (legacy/v2/EnergyProofRegistry.sol#125)
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#dangerous-strict-equalities
 INFO:Detectors:
 Detector: events-access
-EnergyProofRegistry.transferOwnership(address) (src/EnergyProofRegistry.sol#148-151) should emit an event for: 
-	- owner = newOwner (src/EnergyProofRegistry.sol#150) 
+EnergyProofRegistry.transferOwnership(address) (legacy/v2/EnergyProofRegistry.sol#148-151) should emit an event for: 
+	- owner = newOwner (legacy/v2/EnergyProofRegistry.sol#150) 
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-events-access-control
 INFO:Detectors:
 Detector: timestamp
-EnergyProofRegistry.isOnline(uint256) (src/EnergyProofRegistry.sol#124-127) uses timestamp for comparisons
+EnergyProofRegistry.isOnline(uint256) (legacy/v2/EnergyProofRegistry.sol#124-127) uses timestamp for comparisons
 	Dangerous comparisons:
-	- lastEpochTimestamp[deviceId] == 0 (src/EnergyProofRegistry.sol#125)
-	- block.timestamp - lastEpochTimestamp[deviceId] < ONLINE_TIMEOUT (src/EnergyProofRegistry.sol#126)
+	- lastEpochTimestamp[deviceId] == 0 (legacy/v2/EnergyProofRegistry.sol#125)
+	- block.timestamp - lastEpochTimestamp[deviceId] < ONLINE_TIMEOUT (legacy/v2/EnergyProofRegistry.sol#126)
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
-INFO:Slither:src/EnergyProofRegistry.sol analyzed (2 contracts with 96 detectors), 3 result(s) found
+INFO:Slither:legacy/v2/EnergyProofRegistry.sol analyzed (2 contracts with 96 detectors), 3 result(s) found

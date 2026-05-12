@@ -57,6 +57,6 @@ jobs:
         working-directory: contracts
 
       - name: Run Slither on EnergyProofRegistry
-        run: slither src/EnergyProofRegistry.sol --config-file slither.config.json
+        run: slither legacy/v2/EnergyProofRegistry.sol --config-file slither.config.json
         working-directory: contracts
         continue-on-error: true
