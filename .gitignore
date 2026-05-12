@@ -6,8 +6,6 @@ contracts/broadcast/**/dry-run/
 
 # === Node.js (aggregator, dashboard) ===
 node_modules/
-package-lock.json
-yarn.lock
 .npm/
 *.log
 
