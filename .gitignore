@@ -46,3 +46,12 @@ zk/circuits/*/*.log
 *.db
 *.sqlite
 *.sqlite3
+
+# === Legacy ZK artifacts (generated, але після переміщення у legacy/) ===
+zk/circuits/legacy/*/target/
+zk/circuits/legacy/*/out/
+zk/circuits/legacy/*/*.log
+
+# === Lib internal lock files (vendored deps) ===
+contracts/lib/*/package-lock.json
+contracts/lib/*/yarn.lock
