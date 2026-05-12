@@ -23,7 +23,7 @@ jobs:
         run: forge --version
 
       - name: Forge build
-        run: forge build --sizes
+        run: forge build
         working-directory: contracts
 
       - name: Forge test
