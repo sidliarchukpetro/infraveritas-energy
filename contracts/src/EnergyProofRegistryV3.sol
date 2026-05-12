@@ -15,6 +15,7 @@ import {IHonkVerifier} from "./interfaces/IHonkVerifier.sol";
 /// @notice Public inputs to the ZK proof. Encoded as bytes32[] when passed to HonkVerifier.
 /// @dev Mirror of Noir circuit public output structure (see v08 circuit design, Etap 3).
 ///      Hash function for payloadHash: Poseidon (BN254, parameters fixed at v08 design).
+///      Field order MUST match Noir circuit public output order — verify at v08 implementation.
 struct PublicInputs {
     uint64 deviceId;
     uint64 sessionId;
@@ -29,7 +30,7 @@ struct PublicInputs {
 
 /// @title EnergyProofRegistryV3
 /// @notice Records verified energy generation proofs from IoT edge devices.
-/// @dev UUPS upgradeable. See docs/specs/V3_design.md for architecture.
+/// @dev UUPS upgradeable. See docs/specs/V3_design.md (v0.2) for architecture.
 contract EnergyProofRegistryV3 is
     Initializable,
     AccessControlUpgradeable,
@@ -46,10 +47,14 @@ contract EnergyProofRegistryV3 is
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
     uint64 public constant MAX_GAP_SECONDS = 48 hours;
+    uint64 public constant MAX_EPOCH_FUTURE_DRIFT = 300; // 5 min tolerance for GPS/clock drift
+
+    uint256 private constant P256_SIGNATURE_LENGTH = 64; // r (32) || s (32)
+    uint256 private constant P256_PUBKEY_LENGTH = 64;    // X (32) || Y (32)
+    uint256 private constant PUBLIC_INPUTS_COUNT = 9;    // mirrors PublicInputs struct fields
 
     // -------------------------------------------------------------------
-    // Storage (order matters for UUPS — see docs/specs/V3_design.md §9)
-    // Order: external contract addresses (grouped), then mappings, then __gap.
+    // Storage (order matters for UUPS — see docs/specs/V3_design.md §12)
     // -------------------------------------------------------------------
 
     address public deviceRegistry;
@@ -59,7 +64,6 @@ contract EnergyProofRegistryV3 is
     mapping(bytes32 sessionKey => bool used) public usedSessionKeys;
 
     /// @dev Reserved storage gap for future versions. Decrement when adding new state.
-    ///      Was uint256[50] in v0.1 skeleton; now uint256[49] after adding honkVerifier slot.
     uint256[49] private __gap;
 
     // -------------------------------------------------------------------
@@ -73,9 +77,10 @@ contract EnergyProofRegistryV3 is
     error InvalidZKProof();
     error PayloadHashMismatch(bytes32 expected, bytes32 fromPubInputs);
     error EpochInFuture(uint64 epochTs, uint64 blockTs);
+    error InvalidSignatureLength(uint256 length);
+    error InvalidPubkeyLength(uint256 length);
     error ZeroAddress();
     error SameAddress();
-    error NotImplemented();
 
     // -------------------------------------------------------------------
     // Events
@@ -114,10 +119,6 @@ contract EnergyProofRegistryV3 is
     }
 
     /// @notice Initialize the V3 proxy.
-    /// @param admin Root admin (DEFAULT_ADMIN_ROLE, UPGRADER_ROLE).
-    /// @param deviceRegistry_ Address of IDeviceRegistry implementation.
-    /// @param p256Verifier_ Address of IP256Verifier implementation.
-    /// @param honkVerifier_ Address of IHonkVerifier implementation (UltraHonk auto-generated).
     function initialize(
         address admin,
         address deviceRegistry_,
@@ -144,12 +145,10 @@ contract EnergyProofRegistryV3 is
 
     // -------------------------------------------------------------------
     // Core: submitProof
-    // Body implemented in week 4 per docs/specs/V3_design.md §6 + Architecture §submitProof.
-    // Six checks: device authorized, signature valid, hash consistency, ZK valid,
-    //             session unique, epoch sanity. Plus gap-checking (V3-specific).
+    // 7 checks per docs/specs/V3_design.md v0.2 §11, ordered cheap to expensive.
     // -------------------------------------------------------------------
 
-    /// @notice Submit a verified energy proof.
+    /// @notice Submit a verified energy proof from an edge device.
     /// @param pubInputs ZK proof public inputs (mirrors Noir circuit public outputs).
     /// @param payloadHash Poseidon hash of canonical payload, signed by edge.
     /// @param signature ECDSA P-256 signature (64 bytes: r || s) over payloadHash.
@@ -167,9 +166,117 @@ contract EnergyProofRegistryV3 is
         nonReentrant
         onlyRole(OPERATOR_ROLE)
     {
-        // Suppress unused-parameter warnings during skeleton phase.
-        pubInputs; payloadHash; signature; devicePubkey; proof;
-        revert NotImplemented();
+        // === Phase 1: cheap state checks (fail fast on attacks/bugs) ===
+
+        // Length validation for fixed-size bytes parameters
+        if (signature.length != P256_SIGNATURE_LENGTH) {
+            revert InvalidSignatureLength(signature.length);
+        }
+        if (devicePubkey.length != P256_PUBKEY_LENGTH) {
+            revert InvalidPubkeyLength(devicePubkey.length);
+        }
+
+        // CHECK 6: Epoch sanity — epoch не далеко у майбутньому (GPS/clock drift tolerance)
+        if (pubInputs.epochStartTs > block.timestamp + MAX_EPOCH_FUTURE_DRIFT) {
+            revert EpochInFuture(pubInputs.epochStartTs, uint64(block.timestamp));
+        }
+
+        // CHECK 3: Hash consistency — pubInputs.payloadHash mirrors what was signed
+        if (pubInputs.payloadHash != payloadHash) {
+            revert PayloadHashMismatch(payloadHash, pubInputs.payloadHash);
+        }
+
+        // CHECK 5: Session unique — anti-replay protection
+        bytes32 sessionKey = keccak256(
+            abi.encodePacked(pubInputs.deviceId, pubInputs.sessionId)
+        );
+        if (usedSessionKeys[sessionKey]) {
+            revert SessionKeyAlreadyUsed(sessionKey);
+        }
+
+        // CHECK 7a: Gap-checking pre-validation (compute only, no state writes yet)
+        bytes32 deviceIdBytes32 = bytes32(uint256(pubInputs.deviceId));
+        uint64 previousTimestamp = lastSubmissionTimestamp[deviceIdBytes32];
+        uint64 gap = 0;
+        bool postDisconnection = false;
+        if (previousTimestamp != 0) {
+            // Subsequent submission: enforce strict monotonic timestamp
+            if (pubInputs.epochStartTs <= previousTimestamp) {
+                revert InvalidTimestamp(pubInputs.epochStartTs, previousTimestamp);
+            }
+            gap = pubInputs.epochStartTs - previousTimestamp;
+            postDisconnection = gap > MAX_GAP_SECONDS;
+        }
+        // First submission case: previousTimestamp == 0, gap == 0, postDisconnection == false
+
+        // === Phase 2: external view call (low gas, before expensive crypto) ===
+
+        // CHECK 1: Device authorized in DeviceRegistry
+        if (!IDeviceRegistry(deviceRegistry).isAuthorized(devicePubkey)) {
+            revert DeviceNotActive(deviceIdBytes32);
+        }
+
+        // === Phase 3: expensive crypto verification ===
+
+        // CHECK 2: P-256 signature over payloadHash
+        // Extract r, s, pubKeyX, pubKeyY from calldata bytes
+        bytes32 r;
+        bytes32 s;
+        bytes32 pubKeyX;
+        bytes32 pubKeyY;
+        assembly ("memory-safe") {
+            r := calldataload(signature.offset)
+            s := calldataload(add(signature.offset, 32))
+            pubKeyX := calldataload(devicePubkey.offset)
+            pubKeyY := calldataload(add(devicePubkey.offset, 32))
+        }
+        if (!IP256Verifier(p256Verifier).verify(payloadHash, r, s, pubKeyX, pubKeyY)) {
+            revert InvalidP256Signature();
+        }
+
+        // CHECK 4: ZK proof valid
+        bytes32[] memory pubInputsArray = _encodePublicInputs(pubInputs);
+        if (!IHonkVerifier(honkVerifier).verify(proof, pubInputsArray)) {
+            revert InvalidZKProof();
+        }
+
+        // === Phase 4: state writes (only after all 7 checks pass) ===
+
+        usedSessionKeys[sessionKey] = true;
+        lastSubmissionTimestamp[deviceIdBytes32] = pubInputs.epochStartTs;
+
+        // === Phase 5: event emission ===
+
+        emit ProofSubmitted(
+            deviceIdBytes32,
+            sessionKey,
+            pubInputs.epochStartTs,
+            gap,
+            postDisconnection
+        );
+    }
+
+    /// @notice Encode PublicInputs struct as bytes32[] for HonkVerifier.
+    /// @dev Field order MUST match Noir circuit public output order.
+    ///      For int64 fields (lat_e7, lon_e7): two's-complement preserved via int256 intermediate cast.
+    ///      Verify alignment at v08 circuit design (Etap 3).
+    function _encodePublicInputs(PublicInputs calldata pi)
+        internal
+        pure
+        returns (bytes32[] memory)
+    {
+        bytes32[] memory inputs = new bytes32[](PUBLIC_INPUTS_COUNT);
+        inputs[0] = bytes32(uint256(pi.deviceId));
+        inputs[1] = bytes32(uint256(pi.sessionId));
+        inputs[2] = bytes32(uint256(pi.epochStartTs));
+        // int64 → int256 (sign-extend) → uint256 → bytes32 (preserves negative values)
+        inputs[3] = bytes32(uint256(int256(pi.lat_e7)));
+        inputs[4] = bytes32(uint256(int256(pi.lon_e7)));
+        inputs[5] = bytes32(uint256(pi.lightLevel));
+        inputs[6] = bytes32(uint256(pi.tamperFlag));
+        inputs[7] = pi.payloadHash;
+        inputs[8] = bytes32(uint256(pi.totalEnergyMWh));
+        return inputs;
     }
 
     // -------------------------------------------------------------------
