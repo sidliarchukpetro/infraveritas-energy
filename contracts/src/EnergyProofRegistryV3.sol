@@ -10,6 +10,22 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 
 import {IDeviceRegistry} from "./interfaces/IDeviceRegistry.sol";
 import {IP256Verifier} from "./interfaces/IP256Verifier.sol";
+import {IHonkVerifier} from "./interfaces/IHonkVerifier.sol";
+
+/// @notice Public inputs to the ZK proof. Encoded as bytes32[] when passed to HonkVerifier.
+/// @dev Mirror of Noir circuit public output structure (see v08 circuit design, Etap 3).
+///      Hash function for payloadHash: Poseidon (BN254, parameters fixed at v08 design).
+struct PublicInputs {
+    uint64 deviceId;
+    uint64 sessionId;
+    uint64 epochStartTs;
+    int64 lat_e7;
+    int64 lon_e7;
+    uint64 lightLevel;
+    uint64 tamperFlag;
+    bytes32 payloadHash;
+    uint64 totalEnergyMWh;
+}
 
 /// @title EnergyProofRegistryV3
 /// @notice Records verified energy generation proofs from IoT edge devices.
@@ -33,15 +49,18 @@ contract EnergyProofRegistryV3 is
 
     // -------------------------------------------------------------------
     // Storage (order matters for UUPS — see docs/specs/V3_design.md §9)
+    // Order: external contract addresses (grouped), then mappings, then __gap.
     // -------------------------------------------------------------------
 
     address public deviceRegistry;
     address public p256Verifier;
+    address public honkVerifier;
     mapping(bytes32 deviceId => uint64 timestamp) public lastSubmissionTimestamp;
     mapping(bytes32 sessionKey => bool used) public usedSessionKeys;
 
     /// @dev Reserved storage gap for future versions. Decrement when adding new state.
-    uint256[50] private __gap;
+    ///      Was uint256[50] in v0.1 skeleton; now uint256[49] after adding honkVerifier slot.
+    uint256[49] private __gap;
 
     // -------------------------------------------------------------------
     // Errors
@@ -52,6 +71,8 @@ contract EnergyProofRegistryV3 is
     error SessionKeyAlreadyUsed(bytes32 sessionKey);
     error InvalidP256Signature();
     error InvalidZKProof();
+    error PayloadHashMismatch(bytes32 expected, bytes32 fromPubInputs);
+    error EpochInFuture(uint64 epochTs, uint64 blockTs);
     error ZeroAddress();
     error SameAddress();
     error NotImplemented();
@@ -78,6 +99,11 @@ contract EnergyProofRegistryV3 is
         address indexed newVerifier
     );
 
+    event HonkVerifierChanged(
+        address indexed oldVerifier,
+        address indexed newVerifier
+    );
+
     // -------------------------------------------------------------------
     // Initializer
     // -------------------------------------------------------------------
@@ -91,14 +117,17 @@ contract EnergyProofRegistryV3 is
     /// @param admin Root admin (DEFAULT_ADMIN_ROLE, UPGRADER_ROLE).
     /// @param deviceRegistry_ Address of IDeviceRegistry implementation.
     /// @param p256Verifier_ Address of IP256Verifier implementation.
+    /// @param honkVerifier_ Address of IHonkVerifier implementation (UltraHonk auto-generated).
     function initialize(
         address admin,
         address deviceRegistry_,
-        address p256Verifier_
+        address p256Verifier_,
+        address honkVerifier_
     ) external initializer {
         if (admin == address(0)) revert ZeroAddress();
         if (deviceRegistry_ == address(0)) revert ZeroAddress();
         if (p256Verifier_ == address(0)) revert ZeroAddress();
+        if (honkVerifier_ == address(0)) revert ZeroAddress();
 
         __AccessControl_init();
         __Pausable_init();
@@ -110,21 +139,36 @@ contract EnergyProofRegistryV3 is
 
         deviceRegistry = deviceRegistry_;
         p256Verifier = p256Verifier_;
+        honkVerifier = honkVerifier_;
     }
 
     // -------------------------------------------------------------------
-    // Core: submitProof (stub — body in week 4)
+    // Core: submitProof
+    // Body implemented in week 4 per docs/specs/V3_design.md §6 + Architecture §submitProof.
+    // Six checks: device authorized, signature valid, hash consistency, ZK valid,
+    //             session unique, epoch sanity. Plus gap-checking (V3-specific).
     // -------------------------------------------------------------------
 
-    /// @notice Submit a verified energy proof. Body implemented in week 4.
-    /// @dev TODO: finalize parameter list (proof bytes, sessionKey, deviceId,
-    ///      timestamp, P-256 signature components).
-    function submitProof()
+    /// @notice Submit a verified energy proof.
+    /// @param pubInputs ZK proof public inputs (mirrors Noir circuit public outputs).
+    /// @param payloadHash Poseidon hash of canonical payload, signed by edge.
+    /// @param signature ECDSA P-256 signature (64 bytes: r || s) over payloadHash.
+    /// @param devicePubkey Uncompressed P-256 public key (64 bytes: X || Y).
+    /// @param proof UltraHonk ZK proof bytes.
+    function submitProof(
+        PublicInputs calldata pubInputs,
+        bytes32 payloadHash,
+        bytes calldata signature,
+        bytes calldata devicePubkey,
+        bytes calldata proof
+    )
         external
         whenNotPaused
         nonReentrant
         onlyRole(OPERATOR_ROLE)
     {
+        // Suppress unused-parameter warnings during skeleton phase.
+        pubInputs; payloadHash; signature; devicePubkey; proof;
         revert NotImplemented();
     }
 
@@ -141,7 +185,7 @@ contract EnergyProofRegistryV3 is
     }
 
     // -------------------------------------------------------------------
-    // Admin: setters for DeviceRegistry and P256Verifier
+    // Admin: setters for DeviceRegistry, P256Verifier, HonkVerifier
     // -------------------------------------------------------------------
 
     function setDeviceRegistry(address newRegistry)
@@ -164,6 +208,17 @@ contract EnergyProofRegistryV3 is
         if (newVerifier == old) revert SameAddress();
         p256Verifier = newVerifier;
         emit P256VerifierChanged(old, newVerifier);
+    }
+
+    function setHonkVerifier(address newVerifier)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        if (newVerifier == address(0)) revert ZeroAddress();
+        address old = honkVerifier;
+        if (newVerifier == old) revert SameAddress();
+        honkVerifier = newVerifier;
+        emit HonkVerifierChanged(old, newVerifier);
     }
 
     // -------------------------------------------------------------------
