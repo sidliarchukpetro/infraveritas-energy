@@ -1,15 +1,41 @@
-# Remix compiler artifacts
-**/artifacts/
-**/artifacts/**
+# === Foundry ===
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/31337/
+contracts/broadcast/**/dry-run/
 
-# Remix plugin state folders
-deps/
-states/
+# === Node.js (aggregator, dashboard) ===
+node_modules/
+package-lock.json
+yarn.lock
+.npm/
+*.log
 
-# Debug info
-*.dbg.json
-*.tsbuildinfo
+# === Python (edge, scripts) ===
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
 
-# Optional
+# === Noir (ZK) ===
+zk/circuits/*/target/
+zk/prover/target/
+
+# === Secrets ===
 .env
-.env.local
+.env.*
+!.env.example
+*.pem
+*.key
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === OS ===
+.DS_Store
+Thumbs.db
