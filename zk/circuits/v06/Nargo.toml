@@ -1,0 +1,6 @@
+[package]
+name = "energy_v06"
+type = "bin"
+authors = [""]
+
+[dependencies]

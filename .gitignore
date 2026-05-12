@@ -39,3 +39,7 @@ zk/prover/target/
 # === OS ===
 .DS_Store
 Thumbs.db
+
+# === ZK Noir output і debug ===
+zk/circuits/*/out/
+zk/circuits/*/*.log

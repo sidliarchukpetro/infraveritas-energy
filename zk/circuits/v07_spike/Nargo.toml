@@ -1,0 +1,6 @@
+[package]
+name = "energy_v07_spike"
+type = "bin"
+authors = [""]
+
+[dependencies]
