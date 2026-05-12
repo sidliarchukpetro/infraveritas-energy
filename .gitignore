@@ -43,3 +43,8 @@ Thumbs.db
 # === ZK Noir output і debug ===
 zk/circuits/*/out/
 zk/circuits/*/*.log
+
+# === Local databases ===
+*.db
+*.sqlite
+*.sqlite3
