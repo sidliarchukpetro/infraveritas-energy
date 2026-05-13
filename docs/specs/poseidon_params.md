@@ -1,6 +1,6 @@
 # Poseidon Parameter Freeze — v1.0
 
-**Status:** Draft v0.9 (awaiting Olexandr sanity check; promotes to v1.0 after review or 30 days)
+**Status:** v1.0 (Phase 1 test vectors generated 2026-05-13 from Noir + noir-lang/poseidon v0.3.0)
 **Date:** 2026-05-13
 **Authors:** Petro + Claude
 **Reviewer:** Олександр (cybersecurity sanity check — "are these the standard Circom-compatible BN254 params?")
@@ -127,7 +127,7 @@ Store generated vectors у `docs/specs/poseidon_test_vectors.json`:
 
 After vectors generated and committed, this document promotes from Draft v0.9 → v1.0. Until then, **params are frozen but test vectors are unverified**.
 
-**Status update 2026-05-13:** Phase 1 attempted but **DEFERRED** due to ecosystem incompatibility. `noir-lang/poseidon v0.1.1` library не компілюється з Noir 1.0.0-beta.20 (наш встановлений compiler). Details у `zk/circuits/v08_poseidon_vectors/README.md`. Untried alternatives залишаються; Phase 1 повернеться коли або ecosystem stabilizes або ми invest у one of the untried paths.
+**Phase 1 RESOLVED 2026-05-13:** Spočatku пробували `noir-lang/poseidon v0.1.1` — fail (incompatible з Noir 1.0.0-beta.20). Перейшли на `v0.3.0` — success. Test vectors generated, committed at `docs/specs/poseidon_test_vectors.json`. Details у `zk/circuits/v08_poseidon_vectors/README.md`.
 
 ---
 
@@ -233,11 +233,13 @@ Standard BN254 Circom-compatible Poseidon у production:
 
 - ✅ Parameter decision: Poseidon (Hades), BN254, Circom-compatible
 - ✅ Construction decision: Sponge t=3, rate=2, capacity=1
-- ✅ Library selections: Noir stdlib для circuit, circomlibjs для aggregator
-- ⏳ Edge Python library — selection deferred to Phase 2
-- ⏳ Test vectors generation — Phase 1
-- ⏳ Promote this doc to v1.0 after vectors generated
+- ✅ Library selections: `noir-lang/poseidon v0.3.0` для circuit, `circomlibjs` для aggregator
+- ✅ Phase 1: Test vectors generated 2026-05-13 — `docs/specs/poseidon_test_vectors.json`
+- ✅ Doc promoted to v1.0
+- ⏳ Phase 2: Edge Python migration — choose Python Poseidon lib, replace SHA-256, verify test vectors pass
+- ⏳ Phase 3: v08 Noir circuit — apply Poseidon hash з frozen params до canonical payload
+- ⏳ Phase 4: Aggregator TypeScript Poseidon implementation
 
 ---
 
-**Кінець Poseidon parameter freeze v0.9.**
+**Кінець Poseidon parameter freeze v1.0.**

@@ -1,43 +1,28 @@
-# Poseidon test vector generation (DEFERRED 2026-05-13)
+# Poseidon test vector generation
 
-## Status
+**Status: COMPLETE 2026-05-13.** Vectors at `docs/specs/poseidon_test_vectors.json`. `docs/specs/poseidon_params.md` promoted to v1.0.
 
-**DEFERRED** — Phase 1 of Poseidon parameter freeze (test vector generation)
-не завершений через ecosystem incompatibility.
+## Reproducing
 
-## Що пробували
+```bash
+cd zk/circuits/v08_poseidon_vectors
+nargo test --show-output
+```
 
-Створено мінімальний Nargo lib проект з `noir-lang/poseidon v0.1.1` як dependency
-для виконання `nargo test --show-output` і captureу hash values для cross-language
-consistency.
+## Configuration
 
-## Чому не зайшло
+```toml
+[dependencies]
+poseidon = { tag = "v0.3.0", git = "https://github.com/noir-lang/poseidon" }
+```
 
-`noir-lang/poseidon v0.1.1` testovaний з Noir 1.0.0 stable, але у нас встановлений
-Noir 1.0.0-beta.20. Внутрішній файл `src/poseidon2.nr` бібліотеки використовує
-signature `std::poseidon2_permutation(state, 4)` (2 параметри) і `RATE` як runtime
-constant — обидві speci змінилися у beta.20:
-Хоча наш `lib.nr` використовує Poseidon (не Poseidon2), Nargo компілює всю
-dependency, і поломаний `poseidon2.nr` блокує build.
+## Story
 
-## Untried options (для майбутньої сесії)
+- **v0.1.1** failed: `std::poseidon2_permutation` signature змінилася між Noir 1.0.0 stable і beta.20, тому `poseidon2.nr` всередині lib не компілюється. Хоча ми не викликаємо Poseidon2, Nargo компілює всю dependency.
+- **v0.3.0** works: всі 4 test functions pass with Noir 1.0.0-beta.20.
 
-1. **noir-lang/poseidon main branch** — може містити fix для beta.20+
-2. **TaceoLabs noir-poseidon** — інша library, але "permutation only" не повний hash
-3. **Custom sponge implementation** — implement Poseidon manually у Noir, ~300 lines
-4. **Downgrade Noir до 1.0.0 stable** — рискує сумісність з legacy v06 circuit
-5. **Python-generated vectors** — тимчасова compromise, weak source of truth
+Newer tags v0.2.x і v0.3.0 не були listed у GitHub README (де висів v0.1.1), знайшли через `git ls-remote --tags`.
 
-## Що працює
+## Next
 
-Sceleton проекту (Nargo.toml + src/lib.nr) написаний correctly per current
-Noir syntax — `use poseidon::poseidon::bn254;` path правильний для library API.
-Тільки dependency version compatibility — issue.
-
-При наступній спробі: оновити dependency version у Nargo.toml, нічого не міняти
-у lib.nr.
-
-## Залежний artifact
-
-`docs/specs/poseidon_params.md` (v0.9) — committed з frozen параметрами і
-TBD test vectors section. Promote до v1.0 коли Phase 1 успішно закрита.
+Phase 2 (edge Python Poseidon migration) — blocked on this; **now unblocked**.
