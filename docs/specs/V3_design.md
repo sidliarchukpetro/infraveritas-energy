@@ -712,6 +712,12 @@ invariant_pubInputsHashConsistency:
 - На scale 10K submissions/year × 20K gas SSTORE ≈ $2K/year submit cost
 - **Current default:** без TTL cap. Growth manageable.
 
+**Closed during testing (Тарас, 2026-05-13):**
+
+- **Q8 (L-003 Reentrancy: actual revert path)** — **CLOSED.** Всі external verifier interfaces (`IDeviceRegistry`, `IP256Verifier`, `IHonkVerifier`) declare consumed methods як `view`; Solidity emits `STATICCALL` що забороняє state-changing operations включаючи SSTORE при re-entry. Malicious verifier намагаючись re-enter `submitProof()` reverts at first SSTORE, не через `ReentrancyGuardReentrantCall`. Test file `V3_ReentrancyGuard.t.sol` використовує `vm.expectRevert()` без selector. `nonReentrant` modifier remains як defense-in-depth для future non-view verifier interfaces.
+
+- **Q9 (Line coverage 86.67% vs 90% handoff target)** — **CLOSED.** Tool limitation, не test gap. Branch coverage 100% (20/20), function coverage 100% (10/10), statement coverage 87.10%. 12 рядків reported як not covered — все coverage tooling artifacts: line 118 (`_disableInitializers()` у constructor — `--ir-minimum` source-mapping artifact), lines 133-136 (`__AccessControl_init`/`__Pausable_init` macro expansions not tracked), lines 228-231 (assembly blocks not tracked by Foundry coverage).
+
 ---
 
 ## 19. Out of scope для V3 design (deferred)
