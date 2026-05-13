@@ -55,7 +55,10 @@ jobs:
         run: forge build
         working-directory: contracts
 
-      - name: Run Slither on EnergyProofRegistry
+      - name: Run Slither on new contracts (V3 + DeviceRegistry, blocking)
+        run: slither . --config-file slither.config.json
+        working-directory: contracts
+      - name: Run Slither on legacy v2 (informational, non-blocking)
         run: slither legacy/v2/EnergyProofRegistry.sol --config-file slither.config.json
         working-directory: contracts
         continue-on-error: true

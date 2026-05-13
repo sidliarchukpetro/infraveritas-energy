@@ -64,6 +64,7 @@ contract EnergyProofRegistryV3 is
     mapping(bytes32 sessionKey => bool used) public usedSessionKeys;
 
     /// @dev Reserved storage gap for future versions. Decrement when adding new state.
+    // slither-disable-next-line unused-state
     uint256[49] private __gap;
 
     // -------------------------------------------------------------------
@@ -177,6 +178,7 @@ contract EnergyProofRegistryV3 is
         }
 
         // CHECK 6: Epoch sanity — epoch не далеко у майбутньому (GPS/clock drift tolerance)
+        // slither-disable-next-line timestamp
         if (pubInputs.epochStartTs > block.timestamp + MAX_EPOCH_FUTURE_DRIFT) {
             revert EpochInFuture(pubInputs.epochStartTs, uint64(block.timestamp));
         }

@@ -122,6 +122,7 @@ contract DeviceRegistry is AccessControl, IDeviceRegistry {
             return false;
         }
         bytes32 pubKeyHash = keccak256(publicKey);
+        // slither-disable-next-line incorrect-equality,timestamp
         return _devices[pubKeyHash].status == DeviceStatus.Active;
     }
 
