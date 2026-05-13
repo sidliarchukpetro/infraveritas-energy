@@ -127,6 +127,8 @@ Store generated vectors у `docs/specs/poseidon_test_vectors.json`:
 
 After vectors generated and committed, this document promotes from Draft v0.9 → v1.0. Until then, **params are frozen but test vectors are unverified**.
 
+**Status update 2026-05-13:** Phase 1 attempted but **DEFERRED** due to ecosystem incompatibility. `noir-lang/poseidon v0.1.1` library не компілюється з Noir 1.0.0-beta.20 (наш встановлений compiler). Details у `zk/circuits/v08_poseidon_vectors/README.md`. Untried alternatives залишаються; Phase 1 повернеться коли або ecosystem stabilizes або ми invest у one of the untried paths.
+
 ---
 
 ## 5. Cross-language implementation
