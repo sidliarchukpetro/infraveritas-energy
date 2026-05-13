@@ -1,17 +1,17 @@
-"""Canonical payload serialization and hash computation.
+"""Canonical payload serialization and Poseidon hash computation.
 
-Hash function is currently SHA-256 placeholder. Real implementation will use
-Poseidon (BN254) once Olexandr freezes parameters during v08 circuit design
-(Etap 3 тиждень 8 per V3 design v0.3 §3.1).
+Hash: Poseidon BN254 sponge (t=5 rate=4) matching Noir circuit.
+Spec: docs/specs/poseidon_params.md v1.1.
+Tested: edge/tests/test_poseidon_sponge.py.
 
-The hash MUST match what the Noir circuit computes — any divergence causes
-silent verification failure (signature mismatch on chain).
+Encoding: 2456 canonical bytes -> 307 field elements (8 BE bytes per uint64
+-> 1 BN254 field element) -> sponge -> 32-byte digest.
 """
 
-import hashlib
 import struct
 
 from .edge_device import CanonicalPayload, Reading
+from .poseidon import poseidon_sponge
 
 
 # Expected number of readings per epoch (10 Hz × 10 seconds)
@@ -70,17 +70,7 @@ def canonicalize(payload: CanonicalPayload) -> bytes:
 
 
 def compute_payload_hash(payload: CanonicalPayload) -> bytes:
-    """Compute 32-byte payload hash.
-
-    PLACEHOLDER: SHA-256. Target: Poseidon (BN254). Spec frozen v0.9 at
-    docs/specs/poseidon_params.md. Phase 1 (Noir test vectors) DEFERRED, see
-    zk/circuits/v08_poseidon_vectors/README.md. This function unblocked when
-    Phase 1 lands docs/specs/poseidon_test_vectors.json.
-
-    Critical: edge / aggregator / circuit hashes MUST match. Silent
-    mismatch = silent on-chain verification failure.
-
-    Returns 32 bytes signed by edge HSM, used as ZK public input.
-    """
+    """Compute 32-byte Poseidon hash. Matches Noir circuit bit-exact."""
     canonical_bytes = canonicalize(payload)
-    return hashlib.sha256(canonical_bytes).digest()
+    field_elements = [int.from_bytes(canonical_bytes[i:i+8], "big") for i in range(0, len(canonical_bytes), 8)]
+    return poseidon_sponge(field_elements).to_bytes(32, "big")

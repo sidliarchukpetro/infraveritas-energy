@@ -290,13 +290,21 @@ class TestPayloadHash:
         payload = _make_test_payload()
         assert compute_payload_hash(payload) == compute_payload_hash(payload)
 
-    def test_matches_direct_sha256_placeholder(self):
-        """Placeholder hash currently == SHA-256(canonical). When migrating
-        to Poseidon this test will be updated."""
+    def test_matches_direct_poseidon_sponge(self):
+        """compute_payload_hash = poseidon_sponge of canonical bytes packed as field elements."""
+        from hal.poseidon import poseidon_sponge
+        payload = _make_test_payload()
+        cb = canonicalize(payload)
+        fields = [int.from_bytes(cb[i:i + 8], "big") for i in range(0, len(cb), 8)]
+        expected = poseidon_sponge(fields).to_bytes(32, "big")
+        assert compute_payload_hash(payload) == expected
+
+    def test_not_sha256(self):
+        """Regression guard: ensure we did not accidentally revert to SHA-256."""
         import hashlib
         payload = _make_test_payload()
-        expected = hashlib.sha256(canonicalize(payload)).digest()
-        assert compute_payload_hash(payload) == expected
+        sha256_digest = hashlib.sha256(canonicalize(payload)).digest()
+        assert compute_payload_hash(payload) != sha256_digest
 
     def test_different_payloads_different_hashes(self):
         p1 = _make_test_payload()
