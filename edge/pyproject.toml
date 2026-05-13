@@ -13,6 +13,7 @@ authors = [
 license = {text = "UNLICENSED"}
 dependencies = [
     "cryptography>=42.0.0",
+    "circomlibpy>=1.0.0",
 ]
 
 [project.optional-dependencies]
