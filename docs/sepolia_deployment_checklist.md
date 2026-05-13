@@ -39,12 +39,37 @@
 
 ### 1.4 External verifier addresses
 
-**P-256 verifier:**
+**P-256 verifier — три опції з адресами:**
 
-- [ ] Дослідити чи Daimo P256Verifier розгорнутий на Sepolia та його address
-- Daimo репозиторій: https://github.com/daimo-eth/p256-verifier
-- Fallback опція: FCL (Fresh Crypto Lib) P-256 implementation
-- Worst case: deploy own copy P256Verifier — додатковий gas, але неблокуюче
+| # | Implementation | Address | Sepolia status |
+|---|---|---|---|
+| A | Daimo P256Verifier (Solidity, EIP-7212-compatible, audited Veridise) | `0xc2b78104907F722DABAc4C69f826a522B2754De4` | Deterministic CREATE2 address used на усіх EVM chains. Deployed на Ethereum L1, OP, Base, Arbitrum. **Sepolia не явно підтверджений у Daimo docs** — треба cast-verify before relying |
+| B | Vyper port (`pcaversaccio/p256-verifier-vyper`) | `0xD99D0f622506C2521cceb80B78CAeBE1798C7Ed5` | **Confirmed Sepolia + Holešky** |
+| C | Self-deploy Daimo copy via `forge install daimo-eth/p256-verifier` + their `script/Deploy.s.sol` | новий address від нашого deployer | Always available, додаткові ~0.005 Sepolia ETH gas, наш контракт під нашим контролем |
+
+**Verification протокол перед deployment:**
+
+```bash
+# Перевірити що Option A live на Sepolia
+cast code 0xc2b78104907F722DABAc4C69f826a522B2754De4 --rpc-url $RPC_URL
+# Якщо повертає "0x" — не задеплоєний на Sepolia, перейти на Option B
+
+# Перевірити Option B як fallback
+cast code 0xD99D0f622506C2521cceb80B78CAeBE1798C7Ed5 --rpc-url $RPC_URL
+# Має повернути non-empty bytecode (Vyper port confirmed)
+```
+
+**Рекомендація:**
+
+1. Спочатку перевірити Option A (Daimo canonical) — same address як на mainnet, gives mainnet parity
+2. Якщо не доступна, використати Option B (Vyper port) — confirmed Sepolia
+3. Якщо ANI of them не задовольняє audit чи compatibility — Option C (own copy)
+
+**API differences:**
+
+- Daimo `P256.verifySignature(hash, r, s, x, y)` — приймає signature як 5 окремих параметрів
+- V3 contract `IP256Verifier.verify(payloadHash, signature, devicePubkey)` — payload, raw 64-byte signature, raw 64-byte pubkey
+- **Наш `P256Verifier` wrapper** (`contracts/src/P256Verifier.sol`) має конвертувати V3 format → underlying verifier format. Це вже implemented у нашій codebase — verifier address може бути будь-якою сумісною implementation, wrapper isolates differences
 
 **Honk verifier:**
 
