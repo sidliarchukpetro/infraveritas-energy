@@ -22,6 +22,11 @@ P256_PRIVATE_KEY_BYTES = 32
 P256_PUBLIC_KEY_BYTES = 64   # uncompressed X || Y
 P256_SIGNATURE_BYTES = 64    # raw r || s
 
+# P-256 (secp256r1) curve order n.
+# Used for low-s normalization: s > n/2 is normalized to n - s.
+# Required because Noir circuit verify_signature rejects high-s.
+P256_CURVE_ORDER = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+
 
 class P256Signer:
     """Software P-256 ECDSA signer.
@@ -80,4 +85,8 @@ class P256Signer:
 
         # Convert DER → raw (r, s) for on-chain submission
         r, s = decode_dss_signature(signature_der)
+        # Low-s normalization: Noir circuit verify_signature rejects high-s
+        # for non-malleability. PyCA may return either; normalize to low-s.
+        if s > P256_CURVE_ORDER // 2:
+            s = P256_CURVE_ORDER - s
         return r.to_bytes(32, "big") + s.to_bytes(32, "big")

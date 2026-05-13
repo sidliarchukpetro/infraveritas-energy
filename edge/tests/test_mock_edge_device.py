@@ -216,6 +216,17 @@ class TestP256Signer:
         # Verify (raises InvalidSignature if invalid)
         public_key.verify(sig_der, digest, ec.ECDSA(Prehashed(hashes.SHA256())))
 
+    def test_signatures_are_low_s(self):
+        """All signatures MUST have s <= curve_order/2 (Noir circuit rejects high-s)."""
+        from hal.signing import P256_CURVE_ORDER
+        import secrets
+        signer = P256Signer()
+        for _ in range(20):
+            sig = signer.sign(secrets.token_bytes(32))
+            s = int.from_bytes(sig[32:], "big")
+            assert s <= P256_CURVE_ORDER // 2, f"high-s detected: 0x{s:064x}"
+
+
 
 # ============================================================
 # Canonical encoding
