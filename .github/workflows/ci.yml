@@ -29,7 +29,6 @@ jobs:
       - name: Forge test
         run: forge test -vvv
         working-directory: contracts
-        continue-on-error: true
 
   slither:
     name: Slither static analysis
