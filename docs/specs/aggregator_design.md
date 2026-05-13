@@ -1,6 +1,6 @@
 # Aggregator v2 Design — InfraVeritas Energy
 
-**Статус:** Draft v0.1
+**Статус:** Draft v0.2 (V3 alignment корекція - lat/lon/light/total_energy_mwh у public inputs)
 **Дата:** 2026-05-13
 **Автор:** Petro Sydliarchuk
 **Stage:** MVP Plan v1.4 — Етап 5 (передбачається після завершення Етапу 3 v08 circuit)
@@ -66,25 +66,34 @@ Edge надсилає підписаний payload через HTTP POST. JSON-т
 
 Aggregator готує witness file для Noir v08 circuit.
 
-**Public inputs** (видимі у proof, мають збігатися з V3):
+**Public inputs** (9 полів у точному порядку V3.PublicInputs struct):
 
-- `payload_hash` (32 байти) — Poseidon sponge hash 307 елементів поля
-- `device_id_b32` (32 байти) — для V3 ProofSubmitted event
-- `epoch_start_ts` (uint64) — для перевірки `current_ts >= epoch_start_ts + 600s` у V3
-- `session_id` (uint64) — для побудови session_key у V3
-- `tamper_flag` (uint64) — для перевірки `tamper_flag == 0` у V3
+1. `device_id` (Field as uint64)
+2. `session_id` (Field as uint64)
+3. `epoch_start_ts` (Field as uint64)
+4. `lat_e7` (Field as int64) — широта × 10^7
+5. `lon_e7` (Field as int64) — довгота × 10^7
+6. `light_level` (Field as uint64)
+7. `tamper_flag` (Field as uint64)
+8. `payload_hash` (Field, 32 байти)
+9. `total_energy_mwh` (Field as uint64)
 
-**Private inputs** (witness тільки, не витікають):
+**Privacy rationale:** location (lat, lon), light level і total energy — public (не private). InfraVeritas — RWA verification протокол; інвестори і auditors мають бачити location і energy claims активу. Privacy-oriented circuit (v09+) можна додати пізніше якщо emergent regulatory or operational requirements.
+
+**Private inputs** (witness, не утікають у proof):
 
 - `canonical_payload` ([Field; 307]) — повний payload розпакований
-- `signature_r`, `signature_s` (Field) — компоненти P-256 підпису
-- `pubkey_x`, `pubkey_y` (Field) — публічний ключ edge
+- `signature` ([u8; 64]) — P-256 ECDSA: r 32 байти || s 32 байти. **Має бути low-s normalized** (Noir `std::ecdsa_secp256r1::verify_signature` відхиляє high-s)
+- `pubkey_x`, `pubkey_y` ([u8; 32]) — P-256 public key X || Y, big-endian
 
-**Constraints що circuit має enforce:**
+**Constraints які circuit enforce-ить (4 checks):**
 
 1. `Poseidon::sponge(canonical_payload) == payload_hash`
-2. P-256 verify валідний підпис для `payload_hash` під ключем `(pubkey_x, pubkey_y)`
-3. Розпакування `canonical_payload` дає метадані що відповідають public inputs
+2. Metadata destructuring: `canonical_payload[0..7]` повинні equal до 7 public metadata inputs відповідно
+3. P-256 ECDSA verify: підпис валідний для `payload_hash` як 32 BE байти під ключем `(pubkey_x, pubkey_y)`
+4. Energy sum: `sum(canonical_payload[7+i*3] * canonical_payload[8+i*3] for i in 0..100) == total_energy_mwh`
+
+**Implementation:** `zk/circuits/v08/src/main.nr` (31,382 ACIR opcodes total)
 
 ### 3.3 Aggregator → V3 (submitProof)
 
