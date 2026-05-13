@@ -25,8 +25,9 @@ contract DeviceRegistryTest is Test {
     function setUp() public {
         registry = new DeviceRegistry(admin);
 
+        bytes32 operatorRole = registry.OPERATOR_ROLE();
         vm.prank(admin);
-        registry.grantRole(registry.OPERATOR_ROLE(), operator);
+        registry.grantRole(operatorRole, operator);
 
         // 64-byte sample pubkeys (X || Y); content arbitrary for tests
         validPubkey = new bytes(64);
