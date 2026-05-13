@@ -1,4 +1,4 @@
 {
   "detectors_to_exclude": "naming-convention,solc-version,pragma,assembly,low-level-calls",
-  "filter_paths": "lib/,test/,script/"
+  "filter_paths": "lib/,test/,script/,vendor/"
 }
