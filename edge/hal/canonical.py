@@ -72,19 +72,15 @@ def canonicalize(payload: CanonicalPayload) -> bytes:
 def compute_payload_hash(payload: CanonicalPayload) -> bytes:
     """Compute 32-byte payload hash.
 
-    PLACEHOLDER: Currently uses SHA-256. Production code will use Poseidon
-    (BN254) per V3 design v0.3 §3.1.
+    PLACEHOLDER: SHA-256. Target: Poseidon (BN254). Spec frozen v0.9 at
+    docs/specs/poseidon_params.md. Phase 1 (Noir test vectors) DEFERRED, see
+    zk/circuits/v08_poseidon_vectors/README.md. This function unblocked when
+    Phase 1 lands docs/specs/poseidon_test_vectors.json.
 
-    TODO (Etap 3 тиждень 8): Replace with Poseidon hash matching the Noir
-    circuit `std::hash::poseidon` invocation. Parameters fixed by Olexandr
-    during v08 circuit design. Same Poseidon parameters MUST be used in:
-        - Edge (this module, replace hashlib.sha256 with poseidon)
-        - Aggregator TypeScript (@aztec/foundation or circomlibjs)
-        - Noir circuit (std::hash::poseidon)
+    Critical: edge / aggregator / circuit hashes MUST match. Silent
+    mismatch = silent on-chain verification failure.
 
-    Returns:
-        32 bytes — the digest that gets signed by the edge HSM and used
-        as a ZK circuit public input.
+    Returns 32 bytes signed by edge HSM, used as ZK public input.
     """
     canonical_bytes = canonicalize(payload)
     return hashlib.sha256(canonical_bytes).digest()
