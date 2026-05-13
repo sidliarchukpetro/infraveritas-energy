@@ -1,27 +1,11 @@
 # V3 Design — EnergyProofRegistryV3
 
-**Статус:** Draft v0.3
-**Дата:** 2026-05-13
+**Статус:** Draft v0.2
+**Дата:** 2026-05-12
 **Автор:** Petro Sydliarchuk
 **Reviewers:** Oleksandr (security review), Taras (test plan)
 **Stage:** MVP Plan v1.4 — Етап 2 (тижні 3-7)
 **Closes:** L-001 … L-006 з `docs/specs/v2_known_limitations.md`
-
----
-
-## Changelog v0.2 → v0.3
-
-- **DeviceRegistry implemented** (commit 8dd189b) — `contracts/src/DeviceRegistry.sol`, 24 unit tests у `contracts/test/DeviceRegistry.t.sol`, всі проходять
-- **V3 + DeviceRegistry integration tests** (commit 1f575a6) — 9 тестів у `contracts/test/V3WithDeviceRegistry.t.sol` покривають authorization flow end-to-end (happy path, unregistered/revoked/suspended device, reactivation, multi-device independence)
-- **Deployment scripts** (commit 6570aac) — `Deploy.s.sol`, `DeployLocal.s.sol`, `DeployDeviceRegistry.s.sol` плюс `.env.example` і `docs/deployment.md`. Локально перевірено end-to-end через anvil (повний стек розгорнутий, всі транзакції успішні)
-- **CI workflow fix** (commit 67e3c14) — видалено `continue-on-error: true` з forge test step. До цього CI рапортував green незалежно від результатів тестів. Тепер CI signal надійний
-- **Test setUp fix** (commit 2e09d40) — `vm.prank` gotcha у `DeviceRegistry.t.sol`: prank споживався першим external call (`registry.OPERATOR_ROLE()`), не доходив до `grantRole`. Виправлено через cache role у локальну змінну перед prank
-- **§18 Q4 closed:** DeviceRegistry non-upgradeable confirmed
-- **DeviceRegistry design deviation from v0.2 spec accepted:**
-  - Назва ролі: `OPERATOR_ROLE` (не `REGISTRAR_ROLE`) — консистентно з `V3.OPERATOR_ROLE`
-  - Device struct: dropped `owner address`, додано `int32 latE7`, `int32 lonE7` для майбутнього V4 geographic bounds checking (координати зберігаються внутрішньо, не експонуються через `IDeviceRegistry`)
-  - Status: `DeviceStatus` enum (Unknown/Active/Revoked/Suspended) замість `bool isActive` — підтримує reactivate і suspend lifecycle
-  - Owner tracking deferred to aggregator off-chain БД (V3 контракт не потребує owner для своїх 7 checks)
 
 ---
 
@@ -242,88 +226,60 @@ uint64 public constant MAX_GAP_SECONDS = 48 hours;  // 172800
 
 ## 8. L-005: DeviceRegistry
 
-**Status:** IMPLEMENTED (commit 8dd189b). Файл `contracts/src/DeviceRegistry.sol`, 24 unit tests у `contracts/test/DeviceRegistry.t.sol` (всі проходять), 9 integration tests з V3 у `contracts/test/V3WithDeviceRegistry.t.sol`.
+Окремий контракт, **non-upgradeable у MVP** (рішення — §15 open question 4).
 
-Окремий контракт, **non-upgradeable у MVP** (закрите рішення — §18 Q4).
-
-**Storage (актуально, deviation від v0.2 specs прийнята):**
+**Storage:**
 
 ```solidity
-enum DeviceStatus { Unknown, Active, Revoked, Suspended }
-
 struct Device {
-    int32 latE7;          // зареєстровані координати (для V4+ GPS bounds check)
-    int32 lonE7;
+    bytes publicKey;     // 64 bytes — secp256r1 X || Y (P-256)
+    address owner;
     uint64 registeredAt;
-    DeviceStatus status;  // single slot pack: 4 + 4 + 8 + 1 = 17 bytes, fits in 32
+    bool isActive;
 }
 
-mapping(bytes32 pubKeyHash => Device) private _devices;  // key: keccak256(publicKey)
-uint256 public deviceCount;  // monotonic lifetime counter
+mapping(bytes32 pubkeyHash => Device) private devices;  // key: keccak256(publicKey)
 ```
 
-**Deviations від v0.2 design:**
-
-- Dropped `owner address` — ownership tracking deferred to aggregator off-chain БД. V3 контракт не потребує owner для своїх 7 checks
-- Added `latE7`, `lonE7` — внутрішнє зберігання для майбутнього V4 geographic bounds checking. Координати **не експонуються** через IDeviceRegistry, тільки через окремі view функції (`getDeviceInfo`)
-- `DeviceStatus` enum замість `bool isActive` — підтримує reactivate (revoked → active) і suspend (active → suspended → active) lifecycle, що `bool` не може виразити
-
 **Ролі:**
-- `DEFAULT_ADMIN_ROLE` — керує ролями (root)
-- `OPERATOR_ROLE` — виконує lifecycle операції з пристроями (register, revoke, reactivate, suspend)
+- `DEFAULT_ADMIN_ROLE` — root
+- `REGISTRAR_ROLE` — додає, деактивує, реактивує devices
 
-Назва `OPERATOR_ROLE` (не `REGISTRAR_ROLE` як у v0.2 specs) — консистентно з `V3.OPERATOR_ROLE`. Admin **не** отримує OPERATOR_ROLE автоматично — має явно grantRole собі або іншому акаунту.
-
-**Interface (final, мінімальний):**
+**Interface (per Architecture.docx pattern — pubkey-based identity):**
 
 ```solidity
 interface IDeviceRegistry {
     function isAuthorized(bytes calldata publicKey) external view returns (bool);
+    function getDevice(bytes calldata publicKey) external view returns (Device memory);
 }
 ```
 
-**Чому інтерфейс мінімальний:**
-
-`isAuthorized(pubkey) returns (bool)` — це все що V3 потребує. Координати, status, registeredAt — exposed через окремі view функції (`getDeviceInfo`, `getDeviceStatus`) **поза інтерфейсом IDeviceRegistry**. V3 контракт не запитує цих даних, тому розширення інтерфейсу до combined call (`authorize(pubkey, lat, lon)`) було б over-engineering — потребувало б змін V3 контракту без жодної реальної функціональної потреби сьогодні.
-
 **Why pubkey-based, not deviceId-based:**
 - Одна перевірка `isAuthorized(pubkey)` замість двох (`isActive(id)` + `getPublicKey(id)`)
-- Pubkey і так у параметрах submitProof для P256 verify — не дублюємо lookup
+- Pubkey і так у параметрах submitProof для P256 verify — не дублюємо лookup
 - Pubkey є криптографічним identity, deviceId просто human-readable counter у pubInputs
 
-`deviceId` (з PublicInputs) використовується для **event indexing** і **gap-checking** lookup у V3. `devicePubkey` — для verification у V3 і isAuthorized у DeviceRegistry.
+`deviceId` (з PublicInputs) використовується для **event indexing** і **gap-checking** lookup. `devicePubkey` — для verification.
 
-**Operator functions:**
-- `registerDevice(bytes publicKey, int32 latE7, int32 lonE7)` — валідує довжину pubkey (64 bytes) і координати у межах [-90°, +90°] × [-180°, +180°]
-- `revokeDevice(bytes publicKey)` — status → Revoked
-- `reactivateDevice(bytes publicKey)` — status → Active (from Revoked or Suspended)
-- `suspendDevice(bytes publicKey)` — status → Suspended (from Active only)
-
-Всі — `onlyRole(OPERATOR_ROLE)`.
-
-**View functions (поза IDeviceRegistry):**
-- `isAuthorized(bytes publicKey) returns (bool)` — IDeviceRegistry hot path
-- `getDeviceInfo(bytes publicKey) returns (int32 lat, int32 lon, uint64 registeredAt, DeviceStatus)` — full metadata
-- `getDeviceStatus(bytes publicKey) returns (DeviceStatus)` — short query
-- `deviceCount() returns (uint256)` — monotonic lifetime counter
+**Mutators:**
+- `registerDevice(bytes publicKey, address owner)` — `onlyRole(REGISTRAR_ROLE)`
+- `deactivateDevice(bytes publicKey)` — `onlyRole(REGISTRAR_ROLE)`
+- `reactivateDevice(bytes publicKey)` — `onlyRole(REGISTRAR_ROLE)`
 
 **Events:**
-- `DeviceRegistered(bytes32 indexed pubKeyHash, int32 latE7, int32 lonE7, uint64 registeredAt, address indexed operator)`
-- `DeviceRevoked(bytes32 indexed pubKeyHash, address indexed operator)`
-- `DeviceReactivated(bytes32 indexed pubKeyHash, address indexed operator)`
-- `DeviceSuspended(bytes32 indexed pubKeyHash, address indexed operator)`
-
-Pubkey indexed як `keccak256` hash (32 bytes — fits у indexed topic). Operator address indexed для off-chain filtering за виконавцем.
+- `DeviceRegistered(bytes indexed publicKey, address indexed owner, uint64 timestamp)`
+- `DeviceDeactivated(bytes indexed publicKey, uint64 timestamp)`
+- `DeviceReactivated(bytes indexed publicKey, uint64 timestamp)`
 
 **Integration з V3:**
 
 ```solidity
 if (!IDeviceRegistry(deviceRegistry).isAuthorized(devicePubkey)) {
-    revert DeviceNotActive(deviceIdBytes32);
+    revert DeviceNotActive(bytes32(keccak256(devicePubkey)));
 }
 ```
 
-V3 може swap registry: `setDeviceRegistry(address)` — `onlyRole(DEFAULT_ADMIN_ROLE)`. Перевірено через `V3WithDeviceRegistry.t.sol` (9 інтеграційних тестів — happy path, lifecycle, multi-device independence).
+V3 may swap registry: `setDeviceRegistry(address)` — `onlyRole(DEFAULT_ADMIN_ROLE)`.
 
 ---
 
@@ -595,19 +551,19 @@ error NotImplemented();   // tymchasowo, для skeleton stubs
 Test contracts:
 
 ```
-test/V3_AccessControl.t.sol           (L-001) ⏳ Taras
-test/V3_Pausable.t.sol                (L-002) ⏳ Taras
-test/V3_ReentrancyGuard.t.sol         (L-003) ⏳ Taras
-test/V3_GapChecking.t.sol             (L-004) ⏳ Taras
-test/V3WithDeviceRegistry.t.sol       (L-005 integration, 9 tests) ✅ written 2026-05-13
-test/V3_P256VerifierIntegration.t.sol    (L-006) ⏳ Taras
-test/V3_HonkVerifierIntegration.t.sol    (HonkVerifier wrapper) ⏳ Taras
-test/V3_Integration.t.sol             (end-to-end with mocks) ⏳ Taras
-test/DeviceRegistry.t.sol             (standalone, 24 tests) ✅ written 2026-05-13
-test/mocks/MockHonkVerifier.sol       (controllable verifier) ✅
-test/mocks/MockP256Verifier.sol       (controllable verifier) ✅
-test/mocks/MockDeviceRegistry.sol     (controllable registry — kept for Taras L-005 mock-only V3 tests) ✅
-test/mocks/MaliciousVerifier.sol      (reentrancy attacker) ⏳ Taras
+test/V3_AccessControl.t.sol           (L-001)
+test/V3_Pausable.t.sol                (L-002)
+test/V3_ReentrancyGuard.t.sol         (L-003)
+test/V3_GapChecking.t.sol             (L-004)
+test/V3_DeviceRegistryIntegration.t.sol  (L-005)
+test/V3_P256VerifierIntegration.t.sol    (L-006)
+test/V3_HonkVerifierIntegration.t.sol    (HonkVerifier wrapper, new)
+test/V3_Integration.t.sol             (end-to-end, all together)
+test/DeviceRegistry.t.sol             (standalone)
+test/mocks/MockHonkVerifier.sol       (controllable verifier, always-true or selectable)
+test/mocks/MockP256Verifier.sol       (controllable verifier)
+test/mocks/MockDeviceRegistry.sol     (controllable registry)
+test/mocks/MaliciousVerifier.sol      (reentrancy attacker)
 ```
 
 **Per-limitation scenarios** (детальний test plan як specification для Тараса):
@@ -682,11 +638,7 @@ invariant_pubInputsHashConsistency:
 
 - **Q6 (HonkVerifier hardcode vs wrapper)** — **CLOSED.** Wrapper pattern, mirror P256Verifier. Implemented у v0.2 skeleton.
 
-**Closed since v0.2:**
-
-- **Q4 (DeviceRegistry upgradeable vs non-upgradeable)** — **CLOSED.** Non-upgradeable (default). Implementation на `contracts/src/DeviceRegistry.sol` без UUPSUpgradeable inheritance. Якщо знадобиться fix bug — swap через `V3.setDeviceRegistry(newAddress)`, painful але manageable (всі devices re-registered через `OPERATOR_ROLE`).
-
-**Still open для Олександрового review (handoff doc: `docs/handoffs/2026-05-13-oleksandr-v3-review.md`):**
+**Still open для Олександрового review:**
 
 **Q1. `MAX_GAP_SECONDS` — constant чи storage?**
 - Constant: економить gas, без admin tuning
@@ -704,6 +656,10 @@ invariant_pubInputsHashConsistency:
 - Чи передбачаємо V4 з >49 новими полями? Якщо так — збільшити.
 - **Current default:** 49, OZ-recommended.
 
+**Q4. DeviceRegistry — upgradeable чи non-upgradeable?**
+- **Current default:** non-upgradeable. Якщо bug — `setDeviceRegistry(newAddress)` у V3, але втрачаємо state.
+- Альтернатива: DeviceRegistry як UUPS — fix bug без re-registration.
+
 **Q5. `isAuthorized` перевірка — on-chain чи aggregator?**
 - **Current default:** on-chain (V3 викликає DeviceRegistry.isAuthorized). +3K gas, defense-in-depth.
 
@@ -720,6 +676,7 @@ invariant_pubInputsHashConsistency:
 |---|---|---|
 | EIP-712 typed signing | 5 | Polish, не core security |
 | Per-device rate limit on-chain | 5 | Зараз rate limit у aggregator достатньо |
+| UUPS proxy deployment scripts | 6 | Окрема робота, не у scope design |
 | Echidna invariant testing setup | 7 | Preview у §17, повна setup пізніше |
 | OZ v5.0.2 → v5.2.0 для ReentrancyGuardTransient | Pre-mainnet (Phase 11) | $1-2K/year gas saving не varta swap на менш battle-tested код під час dev |
 
@@ -727,53 +684,73 @@ invariant_pubInputsHashConsistency:
 
 ## 20. Status of next steps
 
-1. ✅ V3 design v0.1 committed (a84166b, 2026-05-12)
-2. ✅ OZ-upgradeable v5.0.2 dependency installed (53df18d, 2026-05-12)
-3. ✅ V3 skeleton committed (53df18d, 2026-05-12)
-4. ✅ V3 patch — HonkVerifier wrapper + PublicInputs struct (09652b9, 2026-05-12)
-5. ✅ V3 design v0.2 (4ac735d, 2026-05-12)
-6. ✅ submitProof body implementation з 7 verification checks (2d64198, 2026-05-12)
-7. ✅ Test mocks MockHonkVerifier/MockP256Verifier/MockDeviceRegistry (ed5ec0d, 2026-05-12)
-8. ✅ Taras handoff doc — V3 Foundry tests brief (e198bae, 2026-05-12)
-9. ✅ Oleksandr handoff doc — §18 review questions Q1-Q5, Q7 (9caa219, 2026-05-13)
-10. ✅ DeviceRegistry contract + 24 unit tests (8dd189b, 2026-05-13)
-11. ✅ Test setUp fix — vm.prank gotcha (2e09d40, 2026-05-13)
-12. ✅ CI workflow fix — continue-on-error removed (67e3c14, 2026-05-13)
-13. ✅ V3 + DeviceRegistry integration tests, 9 tests (1f575a6, 2026-05-13)
-14. ✅ Deployment scripts + .env.example + docs/deployment.md, локально перевірено end-to-end через anvil (6570aac, 2026-05-13)
-15. ✅ V3 design v0.3 — this document
-16. ⏳ Taras Foundry unit tests for V3 (L-001..L-006 + MaliciousVerifier) — у роботі
-17. ⏳ Oleksandr async review §18 open questions Q1, Q2, Q3, Q5, Q7 (Q4 closed); blocked by his diploma
-18. ⏳ Slither config update для аналізу `EnergyProofRegistryV3.sol` і `DeviceRegistry.sol` замість legacy v2 — окрема задача
-19. ⏳ Sepolia розгортання — операційний крок, потребує реальний P-256 верифікатор (Daimo address у Sepolia), ETH у гаманці деплоєра, Etherscan API ключ. Наступна сесія.
-20. ⏳ Передача DEFAULT_ADMIN_ROLE на Gnosis Safe мультипідпис — pre-mainnet (Етап 8)
+1. ✅ V3 design v0.1 committed (a84166b)
+2. ✅ OZ-upgradeable v5.0.2 dependency installed (53df18d)
+3. ✅ V3 skeleton committed (53df18d)
+4. ✅ V3 patch — HonkVerifier wrapper + PublicInputs struct (09652b9)
+5. ✅ V3 design v0.2 — this document
+6. ⏳ submitProof body implementation (week 4 work, ~1.5-2 hours)
+7. ⏳ MockHonkVerifier, MockP256Verifier, MockDeviceRegistry for unit tests
+8. ⏳ Foundry tests per §16 plan (Тарас, паралельно)
+9. ⏳ Олександр review of §18 open questions Q1-Q5, Q7 (async)
 
 ---
 
-## 21. Deployment
+**Кінець V3 design v0.2.**
 
-**Scripts (`contracts/script/`):**
 
-- `Deploy.s.sol` — основний сценарій для Sepolia і мейннет. Деплоєр стає initial DEFAULT_ADMIN_ROLE на обох контрактах. Вимагає env: `PRIVATE_KEY`, `OPERATOR_ADDRESS`, `P256_VERIFIER_ADDRESS`, `HONK_VERIFIER_ADDRESS`. Опціонально реєструє один тестовий пристрій через `TEST_DEVICE_PUBKEY`.
-- `DeployLocal.s.sol` — локальне розгортання у anvil з заглушками верифікаторів. Використовує anvil default accounts якщо env не встановлені. Дозволяє full end-to-end тестування без зовнішніх залежностей.
-- `DeployDeviceRegistry.s.sol` — вузький сценарій для розгортання тільки DeviceRegistry (коли V3 вже розгорнутий і треба замінити registry).
+### Q8 — L-003 Reentrancy: actual revert path (added 2026-05-12)
 
-**Документація:** `docs/deployment.md` — інструкції для anvil і Sepolia, контрольний список після розгортання, процедура передачі адмінства на мультипідпис.
+Status: Resolved by tests with adjusted expectations.
 
-**Локальне підтвердження (2026-05-13 через anvil):**
+All external verifier interfaces (`IDeviceRegistry`, `IP256Verifier`, `IHonkVerifier`)
+declare their consumed methods as `view`. Solidity emits `STATICCALL` for those.
+EVM `STATICCALL` forbids state-changing operations in the called contract or any
+nested call — so a malicious verifier attempting to re-enter `submitProof()` reverts
+at the first SSTORE in the re-entry, not via `ReentrancyGuardReentrantCall`.
 
-| Контракт | Адреса (anvil) |
-| --- | --- |
-| DeviceRegistry | `0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0` |
-| V3 implementation | `0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9` |
-| V3 proxy | `0x5FC8d32690cc91D4c39d9d3abcBD16989F875707` |
-| P256 mock | `0x5FbDB2315678afecb367f032d93F642f64180aa3` |
-| Honk mock | `0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512` |
+Test file `V3_ReentrancyGuard.t.sol` uses `vm.expectRevert()` without selector
+(any revert is acceptable) and documents the rationale. `nonReentrant` modifier
+remains as defense-in-depth for any future non-view verifier interface.
 
-Всі транзакції успішні, адмін отримав DEFAULT_ADMIN_ROLE на обох контрактах, оператор отримав OPERATOR_ROLE на обох.
 
-**Pending (наступна сесія):** реальне розгортання у Sepolia. Залежності з пунктів 18, 19 з §20.
+### Q9 — Line coverage 86.67% (resolved by tool limitation, 2026-05-12)
 
----
+Status: Resolved. Line coverage cannot reach handoff target ≥90% due to a Foundry
+toolchain limitation, not insufficient tests. Branch coverage achieves 100% (20/20).
 
-**Кінець V3 design v0.3.**
+Final metrics on src/EnergyProofRegistryV3.sol:
+  - Branches:  100.00%  (20/20)   ✓ target ≥90%
+  - Functions: 100.00%  (10/10)   ✓
+  - Statements: 87.10%  (81/93)
+  - Lines:      86.67%  (78/90)   ✗ target ≥90% — see below
+
+12 lines reported as not covered are all artifacts of the coverage tooling:
+
+| Line(s) | Code                                                | Reason                                          |
+|---------|-----------------------------------------------------|-------------------------------------------------|
+| 118     | _disableInitializers() in constructor               | --ir-minimum source-mapping artifact            |
+| 133–136 | __AccessControl_init/__Pausable_init/etc            | Macro expansions not tracked by line counter    |
+| 228–231 | assembly { r := calldataload(...) ... }             | Assembly blocks not tracked by Foundry coverage |
+| 279     | return inputs; in _encodePublicInputs               | Source-mapping artifact (function called 32×)   |
+| 287     | _pause(); body of pause()                           | Source-mapping artifact (called 7×)             |
+| 291     | _unpause(); body of unpause()                       | Source-mapping artifact (called 4×)             |
+
+All 12 lines DO execute — confirmed by FNDA function-hit counters in lcov output.
+The constructor runs 47×, initialize() 50×+, pause() 7×, unpause() 4×, etc.
+
+Root cause: forge coverage cannot run with viaIR optimizer enabled (the source maps
+that Solidity emits in optimised mode are incomplete for coverage). Without viaIR,
+the assembly block at line 227–232 triggers "Stack too deep". The --ir-minimum flag
+enables viaIR with minimum optimization as a workaround, but Foundry explicitly
+warns that source mappings under this mode can be inaccurate.
+
+Mitigation: branches and functions both 100%. Every revert path and every
+function entry is exercised. The 12 unreached lines are mechanical statements
+inside otherwise-covered functions.
+
+If a future requirement insists on literal ≥90% lines, options are:
+  1. Switch to coverage-via-trace tooling (heavier, separate setup).
+  2. Refactor the assembly block in submitProof to a pure-Solidity equivalent
+     and rerun coverage without --ir-minimum (would also remove assembly artifact
+     at lines 228–231). NOTE: this is a src/ change and outside Stage 2 scope.
