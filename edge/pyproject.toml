@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "infraveritas-edge"
+version = "0.1.0"
+description = "InfraVeritas edge device HAL and simulator"
+requires-python = ">=3.10"
+authors = [
+    {name = "Petro Sydliarchuk"},
+]
+license = {text = "UNLICENSED"}
+dependencies = [
+    "cryptography>=42.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hal*"]
+exclude = ["tests*", "legacy*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
