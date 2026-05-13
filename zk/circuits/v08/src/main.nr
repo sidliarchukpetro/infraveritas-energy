@@ -40,4 +40,17 @@ fn main(
     assert(canonical_payload[1] == session_id);
     assert(canonical_payload[2] == epoch_start_ts);
     assert(canonical_payload[6] == tamper_flag);
+
+    // Check 3: P-256 ECDSA signature verify.
+    // Edge HSM signs payload_hash (32 BE bytes) with P-256 private key.
+    // Circuit proves the signature is valid under pubkey (x, y) for the same hash.
+    // Convert public input Field to 32 big-endian bytes for the verifier.
+    let hash_bytes: [u8; 32] = payload_hash.to_be_bytes();
+    let valid = std::ecdsa_secp256r1::verify_signature(
+        pubkey_x,
+        pubkey_y,
+        signature,
+        hash_bytes,
+    );
+    assert(valid);
 }
