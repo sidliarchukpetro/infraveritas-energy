@@ -1,6 +1,6 @@
-# Poseidon Parameter Freeze — v1.0
+# Poseidon Parameter Freeze — v1.1
 
-**Status:** v1.0 (Phase 1 test vectors generated 2026-05-13 from Noir + noir-lang/poseidon v0.3.0)
+**Status:** v1.1 (2026-05-13 — switched sponge from t=3 r=2 to t=5 r=4 to match Noir library's `pub fn sponge`. Cross-language Python ≡ Noir verified for 5 sponge vectors.)
 **Date:** 2026-05-13
 **Authors:** Petro + Claude
 **Reviewer:** Олександр (cybersecurity sanity check — "are these the standard Circom-compatible BN254 params?")
@@ -54,26 +54,25 @@ Pack each uint64 into a separate BN254 Field element (Field holds 254 bits, acco
 - Readings: 300 fields (100 × 3 values per reading)
 - **Total: 307 field elements**
 
-### Construction options
+### Construction decision
 
-**Option A (sponge with t=3, rate=2, capacity=1):**
-- Absorb 2 field elements per permutation
-- ~154 permutations
-- Approximate constraint cost: ~154 × 2098 = ~323,000 constraints just for hashing
-- Simple, well-understood, matches Aragon Noir reference
+**Sponge: t=5, rate=4, capacity=1, output position [1]** — matches Noir's `pub fn sponge` у `noir-lang/poseidon v0.3.0`.
 
-**Option B (Merkle tree of hash_2):**
-- Build binary tree over 307 leaves
-- log₂(307) ≈ 9 levels, ~512 hash_2 calls
-- Approximate constraint cost: ~512 × 2098 = ~1,074,000 constraints — worse
+**Parameters:**
+- State size t=5
+- Rate=4 (4 field elements absorbed per permutation)
+- Capacity=1
+- Initial state: `[0; 5]`
+- Permutation: `x5_5_config()` (Circom-compatible Hades, x^5 S-box, 8 full + 60 partial rounds)
+- Output: `state[1]` after final permutation
 
-**Option C (batching via hash_16):**
-- 307 / 16 = 20 hash_16 calls + final combiner
-- Approximate constraint cost: complex, depends on hash_16 internals — TBD
+**Absorption logic** (from Noir `fn absorb`):**Constraint cost** (307 field elements): 307 / 4 = 76 + remainder 3 → 77 permutations of x5_5.
 
-**Decision: Option A (sponge t=3)** — simplest, lowest constraints, easiest to reproduce cross-language.
+**Cross-language verification (2026-05-13):**
 
-**Implementation:** Sponge construction defined per Hades paper §3. Reference: Aragon ZK research blog (linked in §7) provides exact algorithm for sponge with t=3 absorbing rate-2.
+Python sponge у `edge/hal/poseidon.py` використовує `circomlibpy._build_poseidon(4, 5, inputs, init)` як permutation primitive. **Bit-exact match з Noir** для 5 test vectors різної довжини {4, 5, 8, 17, 100}. Vectors committed у `docs/specs/poseidon_test_vectors.json`.
+
+**Historical note:** Draft v0.9 specified t=3 r=2 sponge based on theoretical preference. v1.1 switched до t=5 r=4 після виявлення що Noir's library exposes цю construction natively. Та сама Poseidon family — інша state width, той самий security level (Poseidon-128).
 
 ---
 
@@ -99,7 +98,7 @@ For cross-language match verification, generate and record:
 2. **hash_2**: Input `[1, 2]` → record output
 3. **hash_3**: Input `[1, 2, 3]` → record output
 4. **hash_16**: Input `[1, 2, ..., 16]` → record output
-5. **sponge t=3 over 307 fields**: Use canonical payload from existing edge test (`_make_test_payload()` у `test_mock_edge_device.py`) → record output
+5. **sponge_N** для різної довжини: {4, 5, 8, 17, 100} field elements — generated, committed у JSON. Covers exact-rate, rate+1, 2×rate, 4×rate+1, mid-size boundary conditions.
 
 Vector #5 is the most important — it's what edge / aggregator / circuit must all produce identically.
 
@@ -232,7 +231,7 @@ Standard BN254 Circom-compatible Poseidon у production:
 ## 9. Status
 
 - ✅ Parameter decision: Poseidon (Hades), BN254, Circom-compatible
-- ✅ Construction decision: Sponge t=3, rate=2, capacity=1
+- ✅ Construction decision: Sponge t=5, rate=4, capacity=1, output[1] (matches Noir `pub fn sponge`)
 - ✅ Library selections: `noir-lang/poseidon v0.3.0` для circuit, `circomlibjs` для aggregator
 - ✅ Phase 1: Test vectors generated 2026-05-13 — `docs/specs/poseidon_test_vectors.json`
 - ✅ Doc promoted to v1.0

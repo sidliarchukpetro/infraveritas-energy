@@ -1,5 +1,5 @@
 {
-  "status": "v1.0",
+  "status": "v1.1",
   "generated": "2026-05-13",
   "source": {
     "noir_compiler": "1.0.0-beta.20",
@@ -13,23 +13,87 @@
   "vectors": {
     "hash_1": {
       "function": "poseidon::poseidon::bn254::hash_1",
-      "input": ["0x01"],
+      "input": [
+        "0x01"
+      ],
       "output": "0x29176100eaa962bdc1fe6c654d6a3c130e96a4d1168b33848b897dc502820133"
     },
     "hash_2": {
       "function": "poseidon::poseidon::bn254::hash_2",
-      "input": ["0x01", "0x02"],
+      "input": [
+        "0x01",
+        "0x02"
+      ],
       "output": "0x115cc0f5e7d690413df64c6b9662e9cf2a3617f2743245519e19607a4417189a"
     },
     "hash_3": {
       "function": "poseidon::poseidon::bn254::hash_3",
-      "input": ["0x01", "0x02", "0x03"],
+      "input": [
+        "0x01",
+        "0x02",
+        "0x03"
+      ],
       "output": "0x0e7732d89e6939c0ff03d5e58dab6302f3230e269dc5b968f725df34ab36d732"
     },
     "hash_16": {
       "function": "poseidon::poseidon::bn254::hash_16",
-      "input": ["0x01", "0x02", "0x03", "0x04", "0x05", "0x06", "0x07", "0x08", "0x09", "0x0a", "0x0b", "0x0c", "0x0d", "0x0e", "0x0f", "0x10"],
+      "input": [
+        "0x01",
+        "0x02",
+        "0x03",
+        "0x04",
+        "0x05",
+        "0x06",
+        "0x07",
+        "0x08",
+        "0x09",
+        "0x0a",
+        "0x0b",
+        "0x0c",
+        "0x0d",
+        "0x0e",
+        "0x0f",
+        "0x10"
+      ],
       "output": "0x16159a551cbb66108281a48099fff949ae08afd7f1f2ec06de2ffb96b919b765"
+    },
+    "sponge_4": {
+      "function": "poseidon::poseidon::bn254::sponge",
+      "input_length": 4,
+      "input_pattern": "[1..4]",
+      "output": "0x1148aaef609aa338b27dafd89bb98862d8bb2b429aceac47d86206154ffe053d"
+    },
+    "sponge_5": {
+      "function": "poseidon::poseidon::bn254::sponge",
+      "input_length": 5,
+      "input_pattern": "[1..5]",
+      "output": "0x046f72048d371ab8c2793248aee7aa80a56a4f990d4d21ca5424509a0d5c85c3"
+    },
+    "sponge_8": {
+      "function": "poseidon::poseidon::bn254::sponge",
+      "input_length": 8,
+      "input_pattern": "[1..8]",
+      "output": "0x2e7c4c9ffd716e467fea513abfe2eff37673fc8630f29490c2e8ded9da5f1ffb"
+    },
+    "sponge_17": {
+      "function": "poseidon::poseidon::bn254::sponge",
+      "input_length": 17,
+      "input_pattern": "[1..17]",
+      "output": "0x144cc38a94cf16102fe122079c1bb44bcbb2e0b17c221f3e9581d724e64fe85b"
+    },
+    "sponge_100": {
+      "function": "poseidon::poseidon::bn254::sponge",
+      "input_length": 100,
+      "input_pattern": "[1..100]",
+      "output": "0x0be93a637bdbf670fe1843f40c63122b7a6a9ec5b3c3a96e085f6a1e59b66856"
     }
+  },
+  "sponge_config": {
+    "state_size_t": 5,
+    "rate": 4,
+    "capacity": 1,
+    "output_position": 1,
+    "noir_function": "poseidon::poseidon::bn254::sponge",
+    "python_equivalent": "poseidon_sponge_x5_5"
   }
 }

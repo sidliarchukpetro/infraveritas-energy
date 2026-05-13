@@ -33,3 +33,44 @@ fn print_hash_16() {
     let h = bn254::hash_16(inputs);
     println(f"hash_16([1..16]) = {h}");
 }
+
+#[test]
+fn print_sponge_5() {
+    let msg: [Field; 5] = [1, 2, 3, 4, 5];
+    let h = bn254::sponge(msg);
+    println(f"sponge([1..5]) = {h}");
+}
+
+#[test]
+fn print_sponge_4() {
+    let msg: [Field; 4] = [1, 2, 3, 4];
+    let h = bn254::sponge(msg);
+    println(f"sponge_4 = {h}");
+}
+
+#[test]
+fn print_sponge_8() {
+    let msg: [Field; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
+    let h = bn254::sponge(msg);
+    println(f"sponge_8 = {h}");
+}
+
+#[test]
+fn print_sponge_17() {
+    let mut msg: [Field; 17] = [0; 17];
+    for i in 0..17 {
+        msg[i] = i as Field + 1;
+    }
+    let h = bn254::sponge(msg);
+    println(f"sponge_17 = {h}");
+}
+
+#[test]
+fn print_sponge_100() {
+    let mut msg: [Field; 100] = [0; 100];
+    for i in 0..100 {
+        msg[i] = i as Field + 1;
+    }
+    let h = bn254::sponge(msg);
+    println(f"sponge_100 = {h}");
+}
