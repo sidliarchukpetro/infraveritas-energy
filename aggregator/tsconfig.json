@@ -9,8 +9,8 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "types": ["node"],
     "outDir": "./dist",
-    "rootDir": "./src",
     "declaration": true,
     "sourceMap": true
   },
