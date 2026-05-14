@@ -1,7 +1,7 @@
 {
   "network": "sepolia",
   "chainId": 11155111,
-  "deployedAt": "2026-05-14T15:13:36Z",
+  "lastUpdated": "2026-05-14T18:00:00Z",
   "deployer": "0xD1Cb30374a2D0D1B3fd9830eAAFf527D5FC13f5f",
   "operator": "0xD1Cb30374a2D0D1B3fd9830eAAFf527D5FC13f5f",
   "contracts": {
@@ -9,73 +9,115 @@
       "address": "0x6249935e8f293cac2a7c4ce3717a14a8b1e83e03",
       "deploymentTx": "0xd526f380bf147239d962015d01548d5faf367feb4a080ea3e5cee35fdbcca6ff",
       "deploymentBlock": 10851844,
+      "deployedAt": "2026-05-14T15:13:36Z",
+      "deployedBy": "taras",
       "etherscan": "https://sepolia.etherscan.io/address/0x6249935e8f293cac2a7c4ce3717a14a8b1e83e03"
     },
     "v3Implementation": {
       "address": "0xebff710df1a22bb877aac9055b698f68b0ed2639",
       "deploymentTx": "0x14be6c76c2778df20169d24356e39b7c04235adf8b8a27250d5f1896bb29a2d5",
       "deploymentBlock": 10851844,
+      "deployedAt": "2026-05-14T15:13:36Z",
+      "deployedBy": "taras",
       "etherscan": "https://sepolia.etherscan.io/address/0xebff710df1a22bb877aac9055b698f68b0ed2639"
     },
     "v3Proxy": {
       "address": "0xf21d900e43214b0abf489f8d6862352aabb09da3",
       "deploymentTx": "0x37c8cb1719f37fd2ac110517af3c6254c1f54122ae510d8075c1ebc4309628dc",
       "deploymentBlock": 10851844,
+      "deployedAt": "2026-05-14T15:13:36Z",
+      "deployedBy": "taras",
       "etherscan": "https://sepolia.etherscan.io/address/0xf21d900e43214b0abf489f8d6862352aabb09da3",
       "note": "ERC1967Proxy fronting v3Implementation. Interact with V3 at this address."
     },
     "honkVerifier": {
+      "active": true,
+      "address": "0xAaEaEDA7e14966a2B69c276e20190316990c08Fc",
+      "deploymentTx": "0x5f9380bef29613a6a3a12a388faa1631185faee3553207622d85ccf604d1ec51",
+      "deployedAt": "2026-05-14T17:42:00Z",
+      "deployedBy": "petro",
+      "etherscan": "https://sepolia.etherscan.io/address/0xAaEaEDA7e14966a2B69c276e20190316990c08Fc",
+      "note": "Active verifier used by V3 (set via setHonkVerifier tx 0x6b3679624bb38df9e3654e232efd918005e791a6e6385bdc7ac99e121c567d4e). Generated using bb 5.0.0-nightly.20260324 to match aggregator's @aztec/bb.js@5.0.0-nightly.20260324 (proof format alignment)."
+    },
+    "honkVerifierLibraries": {
+      "note": "Linked libraries split out of HonkVerifier to fit the EIP-170 24,576-byte runtime limit (per commit 4f2f34b). These are the libraries linked to the active honkVerifier above.",
+      "honkVerificationKey": {
+        "address": "0xce7272a85bea4c9f769b8106444fa0f0d066317a",
+        "deploymentTx": "0xa0e3a0ad496b9a9f9cb3e19334d9c4151ca82d15525837c145d0ee08539e9cca",
+        "etherscan": "https://sepolia.etherscan.io/address/0xce7272a85bea4c9f769b8106444fa0f0d066317a"
+      },
+      "zkTranscriptLib": {
+        "address": "0x877b9ce13efb4535bc5b59854dcbbd9dc2b62748",
+        "deploymentTx": "0x4ff8d14df72461576db004adfb4db5b90dcab8f904f155b4e5d95ca66a6d9b01",
+        "etherscan": "https://sepolia.etherscan.io/address/0x877b9ce13efb4535bc5b59854dcbbd9dc2b62748"
+      },
+      "relationsLib": {
+        "address": "0x0d7fef2e14bb74a13802b6b250fc59b100ce2689",
+        "deploymentTx": "0x6c8c287122a36a7895e62dae5fe7a1735350f93d0e22a36f54ed01be7a14427e",
+        "etherscan": "https://sepolia.etherscan.io/address/0x0d7fef2e14bb74a13802b6b250fc59b100ce2689"
+      }
+    },
+    "honkVerifierDeprecated": {
+      "active": false,
       "address": "0xaf5bfa012d879d6fa87ccca01131f92d52292dc1",
       "deploymentTx": "0x277acdc542455b5a6291ef23360ac6b6e9dcb4f89b552e3df9b6c32b5f74e232",
       "deploymentBlock": 10851814,
-      "etherscan": "https://sepolia.etherscan.io/address/0xaf5bfa012d879d6fa87ccca01131f92d52292dc1"
+      "deployedBy": "taras",
+      "etherscan": "https://sepolia.etherscan.io/address/0xaf5bfa012d879d6fa87ccca01131f92d52292dc1",
+      "note": "Taras's original HonkVerifier — generated using older bb tooling. Replaced because bb.js@4.2.1 vs older bb CLI version produced incompatible proof format (SumcheckFailed on real proofs). Kept on chain for reference; not used by V3 post-setHonkVerifier."
     },
-    "honkVerifierLibraries": {
-      "note": "Linked libraries split out of HonkVerifier to fit the EIP-170 24,576-byte runtime limit (see commit 4f2f34b). Required for HonkVerifier to function.",
-      "honkVerificationKey": {
-        "address": "0x2a45b2d4fa7b99905b386a42c5aaae083b507db0",
-        "deploymentTx": "0x9075fe35006c317edd836bbdf37ea3bc57f11021141fa51f7b8963632396a56d",
-        "deploymentBlock": 10851814,
-        "etherscan": "https://sepolia.etherscan.io/address/0x2a45b2d4fa7b99905b386a42c5aaae083b507db0"
-      },
-      "zkTranscriptLib": {
-        "address": "0x9ecef61516c626cdf9e9ca2ffc1b7bb10cfe427e",
-        "deploymentTx": "0x3d6c9b946e8f89f4eb39edd930e5a3d9bbf9680ce1214bcb297e737cb1bec008",
-        "deploymentBlock": 10851814,
-        "etherscan": "https://sepolia.etherscan.io/address/0x9ecef61516c626cdf9e9ca2ffc1b7bb10cfe427e"
-      },
-      "relationsLib": {
-        "address": "0x58445712ef81f2bdf566641a8bdfdc7afcec0e28",
-        "deploymentTx": "0xec7fdb6bd5eefed16632f7cb30126348920889d4e6532ed0e3840ef70573dcc5",
-        "deploymentBlock": 10851814,
-        "etherscan": "https://sepolia.etherscan.io/address/0x58445712ef81f2bdf566641a8bdfdc7afcec0e28"
-      }
+    "p256VerifierAdapter": {
+      "active": true,
+      "address": "0x690ee97c3c77Dd5B8Fe162eAae45c0944cfd44a0",
+      "deployedAt": "2026-05-14T17:00:00Z",
+      "deployedBy": "petro",
+      "etherscan": "https://sepolia.etherscan.io/address/0x690ee97c3c77Dd5B8Fe162eAae45c0944cfd44a0",
+      "note": "Wraps Daimo's P256 verifier (fallback-only, raw 160-byte calldata interface) to V3's IP256Verifier.verify() interface. Strips Solidity function selector via abi.encodePacked. Set on V3 via setP256Verifier tx 0xcd2ba13b01388aa36e13356450e2c87f47a366969037bd0ed5c6fa02826f16be. Source: contracts/src/P256VerifierAdapter.sol."
     },
-    "p256Verifier": {
+    "p256VerifierDaimo": {
       "address": "0xc2b78104907F722DABAc4C69f826a522B2754De4",
-      "note": "External Daimo canonical RIP-7212 P-256 verifier. Not deployed by this run; pre-existing on Sepolia."
+      "etherscan": "https://sepolia.etherscan.io/address/0xc2b78104907F722DABAc4C69f826a522B2754De4",
+      "note": "External canonical Daimo P-256 verifier per RIP-7212. Fallback-only interface; expects 160 bytes raw calldata (hash || r || s || x || y). Wrapped by p256VerifierAdapter — V3 does NOT call this directly anymore."
     }
   },
-  "verificationChecks": {
-    "adminHasDefaultAdminRole": true,
-    "operatorHasOperatorRole": true,
-    "v3KnowsCorrectDeviceRegistry": true,
-    "v3KnowsCorrectP256Verifier": true,
-    "v3KnowsCorrectHonkVerifier": true
+  "configuration": {
+    "v3.deviceRegistry": "0x6249935e8f293cac2a7c4ce3717a14a8b1e83e03",
+    "v3.p256Verifier": "0x690ee97c3c77Dd5B8Fe162eAae45c0944cfd44a0",
+    "v3.honkVerifier": "0xAaEaEDA7e14966a2B69c276e20190316990c08Fc"
+  },
+  "registeredDevices": [
+    {
+      "pubkey": "0x3402f8b9ae4a3d28ed1898c8d183e12f2b273628066d8b3e94e8ed4379ab3412a99b0be5fe5ccba4bddb849612a3cf969a01afbd02b020b96a3d64d8bf2ae4f7",
+      "latE7": 484517000,
+      "lonE7": 255752000,
+      "location": "48.4517N, 25.5752E (Sniatyn, UA)",
+      "registrationTx": "0xcd456a51d4ccd4a6f55763049792b72a7bb4e061440fb39ca42c32e4fadb92eb",
+      "block": 10852155,
+      "purpose": "smoke test edge device (persistent key at edge/edge-test-key.pem)"
+    }
+  ],
+  "phase1FirstE2E": {
+    "achievedAt": "2026-05-14T17:44:00Z",
+    "sessionKey": "0x08f6ab0983542a637cf5e673cd3e13cac28022539d9f340a3ab53a76712e1298",
+    "elapsedSeconds": 11,
+    "note": "First successful real on-chain submitProof via smoke test (edge -> aggregator -> V3). ProofSubmitted event emitted. Commit c58da32."
   },
   "etherscanVerification": {
     "deviceRegistry": "verified",
     "v3Implementation": "verified",
     "v3Proxy": "verified",
-    "honkVerifier": "verified",
-    "honkVerificationKey": "verified",
-    "zkTranscriptLib": "verified",
-    "relationsLib": "verified"
+    "honkVerifierDeprecated": "verified",
+    "honkVerifierDeprecatedLibraries": "verified",
+    "honkVerifier": "pending",
+    "honkVerifierLibraries": "pending",
+    "p256VerifierAdapter": "pending"
   },
   "notes": [
-    "HonkVerifier compiled to 27,749 B runtime (exceeds EIP-170 24,576 B). Fixed in commit 4f2f34b by changing HonkVerificationKey.loadVerificationKey and RelationsLib.accumulateRelationEvaluations from internal to public, so the libraries deploy separately. Visibility-only change; no cryptographic constants or logic touched.",
-    "The V3 test suite uses MockHonkVerifier and does NOT exercise the real bb-generated HonkVerifier. The deployed verifier must still be validated against a real proof fixture before mainnet use.",
-    "Admin role transfer to a multisig is out of scope for this deployment (security-critical; handled separately by Petro).",
-    "deployer and operator are the same address for this MVP testnet deployment."
+    "Phase 1 (real on-chain E2E) closed 2026-05-14 with commit c58da32. Pipeline edge -> aggregator -> V3.submitProof -> ProofSubmitted event functional.",
+    "HonkVerifier compiled to 27,749 B runtime exceeds EIP-170 24,576 B. Fixed in commit 4f2f34b by changing HonkVerificationKey.loadVerificationKey and RelationsLib.accumulateRelationEvaluations from internal to public so the libraries deploy separately.",
+    "The V3 test suite uses MockHonkVerifier and does NOT exercise the real bb-generated HonkVerifier. Real-proof testing happens via edge/scripts/sepolia_smoke.py against deployed V3.",
+    "Admin role transfer to a multisig is out of scope for this MVP deployment (security-critical; handled separately by Petro).",
+    "deployer and operator are the same address for this MVP testnet deployment.",
+    "bb tooling pinned at version 5.0.0-nightly.20260324 (matches local nargo 1.0.0-beta.20). aggregator's @aztec/bb.js MUST stay at 5.0.0-nightly.20260324 to match deployed HonkVerifier — proof format alignment requires this exact version."
   ]
 }
