@@ -1,3 +1,4 @@
+import "dotenv/config";
 /**
  * Aggregator entry point.
  *
