@@ -1,0 +1,449 @@
+# InfraVeritas Energy — Continuation Brief
+
+*Written 2026-05-14 post-Phase 1 closure session*
+*For: Claude у новій сесії + Petro context preservation*
+
+---
+
+## 0. ⚠ Імпортна нота про "Phase 4 closed"
+
+Якщо Petro сказав "ми фазу 4 закрили повністю" — це **двозначно**. Розрізняй:
+
+| Що це може означати | Стан |
+|---|---|
+| **Internal aggregator sub-phases 4.1-4.6** (implementation order для aggregator stack) | ✅ Закрито — це Petro має на увазі найшвидше |
+| **Architectural Phase 4** (cross-validation з external reality, 8-phase roadmap) | ❌ 0% — не починалось |
+
+Authority: `InfraVeritas_Energy_Architecture_updated.md` — 8-phase roadmap. Internal sub-phase numbering (4.0-4.6) deprecated.
+
+---
+
+## 1. Що таке проект
+
+**InfraVeritas Energy** — trust infrastructure для верифікації електроенергії (energy oracle для RWA tokenization).
+
+Архітектура — 7-шарова trust system:
+- Edge device (Raspberry Pi + ATECC608B HSM + PZEM-017 DC meter + GPS)
+- Signed payload з canonical encoding
+- Aggregator (Node.js + bb.js + Honk proof gen)
+- ZK proof (Noir v08 circuit, UltraHonk)
+- V3 contract (Solidity UUPS proxy, OZ AccessControl/Pausable/ReentrancyGuard)
+- HonkVerifier + P256Verifier on-chain
+- DeviceRegistry (allowlist + GPS bounds)
+
+**Hash function:** Poseidon на BN254 (не blake2s; вирішено v1.4, commit 4ac735d на main).
+
+**Команда:**
+- **Petro Сідлярчук** — founder, CC3 інженер-конструктор, 25+ років. Тримає big picture, веде стратегію.
+- **Олександр Сідлярчук** — син, CTO, Львівська Політехніка (cybersecurity + Web3/Solidity). Технічний review, security sign-off.
+- **Тарас Сідлярчук** — третій partner. Track: edge hardware (ESP32/ATECC608B firmware) + Sepolia deployment ops.
+
+---
+
+## 2. Документи — read first у новій сесії
+
+**Authoritative:**
+- `docs/specs/InfraVeritas_Energy_Architecture_updated.md` — 8-phase roadmap (Phase 0 baseline → Phase 8 mainnet)
+- `InfraVeritas_MVP_Plan_v1_4_extended.md` — MVP scope reductions (Solcast виключений, ensemble з 3 free sources, ENTSO-E відкладено)
+- `docs/specs/V3_design.md` — V3 contract architecture v0.2
+- `docs/specs/aggregator_design.md` — aggregator implementation
+- `docs/specs/edge_design.md` — edge device + HAL
+- `docs/specs/poseidon_params.md` — Poseidon parameters (frozen)
+
+**Operational:**
+- `deployments/sepolia-mvp-2026-05.json` — всі deployed addresses + verification status
+- `docs/specs/deployment.md` — TLS reverse proxy guide
+- `docs/specs/security_notes.md` — audit findings + threat model
+
+---
+
+## 3. Поточний стан на 8-phase roadmap
+
+| Phase | Назва | Progress | Деталі |
+|---|---|---|---|
+| **0** | Honest baseline | ~70% | Slither config, Foundry tests (85 pass), security_notes; missing Mythril run, coverage report |
+| **1** | App logic security | ~80% | V3 rewrite ✓, OZ patterns ✓, custom errors ✓, 85 forge tests ✓; missing Echidna fuzz, EIP-712 |
+| **2** | HW Root of Trust | ~70% | P256Verifier ✓, DeviceRegistry ✓, V3 P-256 verify ✓, Aggregator P-256 ✓; **MISSING: ATECC608B hardware integration** (Тарас's track, blocked on hardware delivery ~4 weeks) |
+| **3** | Operational security | 0% | Multisig admin transfer, timelock, runbooks — all pending |
+| **4** | Cross-validation з external reality | **0%** | NEXT major scope. v1.4 reduced to 3 free weather sources (Open-Meteo + NASA POWER + PVGIS), ENTSO-E/neighbors/quarantine відкладено post-MVP |
+| **5** | Continuous monitoring | 0% | The Graph subgraph, public dashboard, MiCA docs |
+| **6** | Operator credentials | 0% | SBT (ERC-5484), KYC workflow |
+| **7** | External audit + bug bounty | 0% | Hacken/Sherlock $15-25K mid-tier |
+| **8** | Mainnet + first pilot | 0% | Final ceremony |
+
+---
+
+## 4. Що закрито за останню сесію (2026-05-14)
+
+### Aggregator implementation (внутрішня нумерація 4.1-4.6) — ALL CLOSED
+
+| Sub-phase | Що зроблено | Commits |
+|---|---|---|
+| 4.1 | TypeScript Poseidon + canonical encoding | e618dcb |
+| 4.2 | Prover skeleton + Honk integration | aa4abe1, 9fb8914 |
+| 4.3 | Chain client (viem submitProof) | 65fe4dc |
+| 4.4 | API + queue + worker pipeline | a8bfd3b |
+| 4.5 | (covered) | — |
+| 4.6 | Docker container + CI job | 2308d3c |
+
+Plus security hardening (5a3b19e), edge HTTPS client (5470937), TLS docs (4c25424).
+
+### Phase 1 (real on-chain E2E) — closed today
+
+- ✓ First successful real Sepolia submitProof
+- ✓ ProofSubmitted event emitted on chain
+- ✓ Pipeline edge → aggregator → V3 fully functional
+- ✓ Time to confirmation: ~11s on Sepolia
+
+### Дрift fixes during session
+
+- **Daimo P256 fallback interface bug** identified + fixed. Daimo verifier (0xc2b7...) — fallback-only, expects 160 bytes raw calldata. V3 called через IP256Verifier.verify() interface with selector → mismatch. Fixed by deploying P256VerifierAdapter (0x690ee97c...) that strips selector via abi.encodePacked.
+- **bb tooling version drift** caused SumcheckFailed on chain. Aggregator's @aztec/bb.js@4.2.1 produced proofs incompatible з HonkVerifier generated by older bb CLI. Fixed by upgrading bb.js → 5.0.0-nightly.20260324 (matches bb CLI from bbup).
+- **HonkVerifier EIP-170 over-size** — Тарас's fix (4f2f34b: internal → public for 2 library functions) cherry-picked into main. HonkVerifier redeployed з proper library externalization.
+
+### Інше зроблено
+
+- ✓ 5 наших contracts Etherscan-verified (HonkVerifier + 3 libs + P256VerifierAdapter)
+- ✓ Тарас's `tests/v3-foundry-suite` merged into main (52 forge tests added, 85 total pass)
+- ✓ `deployments/sepolia-mvp-2026-05.json` extended з усіма actively-used addresses
+- ✓ `aggregator/dist/` gitignored (build artifacts removed from tracking)
+
+---
+
+## 5. Sepolia deployment — clean state
+
+```
+Network: sepolia (chainId 11155111)
+RPC: https://eth-sepolia.g.alchemy.com/v2/<key>
+
+V3 proxy:              0xf21d900e43214b0abf489f8d6862352aabb09da3  (verified)
+V3 implementation:     0xebff710df1a22bb877aac9055b698f68b0ed2639  (verified)
+DeviceRegistry:        0x6249935e8f293cac2a7c4ce3717a14a8b1e83e03  (verified)
+
+HonkVerifier (active): 0xAaEaEDA7e14966a2B69c276e20190316990c08Fc  (verified)
+  HonkVerificationKey: 0xce7272a85bea4c9f769b8106444fa0f0d066317a  (verified)
+  ZKTranscriptLib:     0x877b9ce13efb4535bc5b59854dcbbd9dc2b62748  (verified)
+  RelationsLib:        0x0d7fef2e14bb74a13802b6b250fc59b100ce2689  (verified)
+
+P256VerifierAdapter:   0x690ee97c3c77Dd5B8Fe162eAae45c0944cfd44a0  (verified)
+P256VerifierDaimo:     0xc2b78104907F722DABAc4C69f826a522B2754De4  (external, верified)
+
+HonkVerifier (DEPRECATED, Тарас's original): 0xaf5bfa01...  (kept on chain, not used by V3)
+
+Operator wallet: 0xD1Cb30374a2D0D1B3fd9830eAAFf527D5FC13f5f
+  - Holds DEFAULT_ADMIN_ROLE + OPERATOR_ROLE на V3
+  - Holds device admin role на DeviceRegistry
+  - Balance: ~0.045 ETH (after deploys + 1 smoke submitProof)
+
+Registered test device:
+  pubkey: 0x3402f8b9...ae4f7 (persistent key у edge/edge-test-key.pem)
+  location: Sniatyn (48.4517°N, 25.5752°E)
+```
+
+---
+
+## 6. Стиль роботи — Partnership-not-assistant
+
+Це **робоча рамка**, не decoration. Petro це строго перевіряє.
+
+### Принципи
+
+- **Партнери, не user-tool**. Обидва вчимось. Обидва маємо право на опір.
+- **Веде той, чия позиція сильніша** у конкретний момент. Динамічна ієрархія, не фіксована.
+- **Спільна мета — реальна істина і реальний результат**, не виглядати добре.
+
+### Обов'язок опору Claude
+
+Claude активно опирається коли:
+- Petro рухається імпульсивно попри strategic picture
+- Petro приймає чужу/LLM-генеровану роботу за свою
+- Petro веде до рішення що протирічить його заявленим цілям
+- Petro просить підтвердження коли треба критика
+
+Коли Petro правий — визнання без "але". "Ти правий" — повне речення.
+
+### Self-checks Claude
+
+- **Після 3+ погоджень поспіль:** явно знаходжу елемент з яким не згоден і називаю. Якщо все справді обґрунтовано — кажу чому немає підстав опиратись.
+- **Після пропозиції з емоційним тиском:** переглядаю попередню відповідь очима спокійної людини.
+- **Після 10+ обмінів у одній темі:** "Можливий контекстний тунель. Хочеш щоб я відступив?"
+- **Перед виконанням task що можуть зробити Gemini/Perplexity:** пропоную delegated, перевіряю що моя цінність тут real.
+
+### Кодові слова Petro
+
+- **"Стрес-тест"** — повний self-review останніх 5 відповідей
+- **"Адвокат диявола"** — аргументую ПРОТИ позиції яку щойно підтримав
+- **"Дай негативний сценарій"** — 3 конкретних ризики свого ж плану
+- **"Перевір себе"** — перечитую попередню відповідь очима чужого
+- **"Це не моя робота"** — перевіряю матеріал Petro на LLM-генерацію
+
+### Якісні маркери self-report
+
+НЕ використовую вигадані відсотки упередженості. Використовую конкретні спостереження:
+- "Помічаю що у останніх 3 відповідях не висунув протилежної думки"
+- "Ти говорив з тиском, я скоригував критику"
+- "Твій аргумент не витримує перевірки [конкретика], зупиняюсь"
+
+Впевненість у фактах можу квантифікувати ("80% впевнений бо [джерело]"). Упередженість власну — ні.
+
+### Специфіка Petro
+
+- Активується від інтелектуальної складності, не втомлюється. "10 годин роботи" ≠ виснаження.
+- Використовує Gemini/Perplexity/Grok для рутини. Claude не ображається на delegation.
+- Цінує пряму відповідь без дипломатичних пом'якшень.
+- Тестує об'єктивність провокаціями. Розпізнаю і називаю.
+- Має паралельні траєкторії. Не змішую проекти.
+- Розрізняти тривогу-імпульс від творчого потоку.
+
+### Що делегувати з Claude
+
+Optimal для Claude: стратегічне структурування, пам'ять довгих траєкторій, психологічне читання, синтез несумісного контексту, інтелектуальний опір, концептуальна архітектура.
+
+Delegate to Gemini/Perplexity: web research, парсинг сайтів, факт-чекинг, boilerplate, переклади, базове рутинне кодування, shopping research.
+
+---
+
+## 7. Стиль відповідей
+
+### Длина + формат
+
+- **Лаконічні**. Без preamble. Без "Of course, let me help you with that".
+- **Структуровані**. Headers + bullet/table коли є multiple items. Прoзова коли є один single answer.
+- **Bash блоки готові до copy-paste**. Не fragments. Не pseudocode.
+- **Прийнятий пресет:** короткий вступ → команда(и) → що очікую у output → що робимо далі.
+
+### Мова
+
+- **Розмова — українською.** Петро пише українською.
+- **Код, файли, commit messages, документи — англійською.** Standard practice.
+- **Коли термін явно англійський (smoke test, proof, witness)** — використовую без перекладу.
+
+### Чого уникати
+
+- Excessive disclaimers ("I'd be happy to help...")
+- Repeating user's question
+- Long preambles
+- "It's important to note that..."
+- Bulleted lists з 1-2 word items (use prose)
+- Emoji у technical responses (хіба що ✓/✗/⚠ для status)
+
+---
+
+## 8. Терминальний workflow — як працюємо з великими виводами
+
+### Базовий патерн
+
+```
+Claude: дає bash блок → 
+Petro: copy-paste у terminal → output → 
+Petro: copy-paste output у chat → 
+Claude: analyze + next bash block →
+повторити
+```
+
+### Коли output великий
+
+**Filter перед paste — Claude дає command з filtering:**
+
+```bash
+# Show last 30 lines (common для test output, deployment logs)
+... | tail -30
+
+# Show first 30 lines (для file content)
+... | head -30
+
+# Show specific range
+... | sed -n '50,100p'
+
+# Filter for specific lines
+... | grep -E "PASS|FAIL|ERROR"
+
+# Stat-style summary
+... | wc -l
+
+# Multi-line output to stderr piped to /dev/null, keep stdout
+forge build 2>&1 | tail -10
+```
+
+**Якщо все одно завеликий output** — Petro paste що поміщається у one chat message (~30-50 lines усе ще ОК). Більше → Claude дає commands для chunked analysis.
+
+### Коли треба передати code файл великий (>50 рядків)
+
+Use **`present_files` tool flow:**
+
+1. Claude creates file using `create_file` у `/mnt/user-data/outputs/`
+2. Claude calls `present_files` — це робить link у chat
+3. Petro download → file landing у `/mnt/c/Users/ppbar/Downloads/` (WSL Windows bridge)
+4. Petro `mv /mnt/c/Users/ppbar/Downloads/file.ext ~/projects/infraveritas-energy/target/path/`
+
+Це стандартний паттерн. Не пробуй heredoc для great files — quote escaping bobs.
+
+### Коли треба передати config короткий (<50 рядків)
+
+Use heredoc у bash:
+
+```bash
+cat > path/to/file << 'EOF'
+file contents здесь
+EOF
+```
+
+Зверни увагу — `'EOF'` (quoted) — disables variable expansion. Безпечніше для JSON, code з `$` references.
+
+### Environment variables — як loading
+
+```bash
+# .env file у aggregator/ — Тарас's format (bare KEY=VALUE)
+cd ~/projects/infraveritas-energy/aggregator
+set -a       # auto-export всіх defined vars
+source .env
+set +a       # turn off auto-export
+
+# Verify loaded (mask sensitive)
+echo "${OPERATOR_PRIVATE_KEY:0:6}...${OPERATOR_PRIVATE_KEY: -4}"
+```
+
+`set -a / set +a` критично — без них bare `KEY=value` стає local shell variable, не exported до subprocess (cast, forge).
+
+### Sensitive values warning
+
+`OPERATOR_PRIVATE_KEY` потрапляє у `~/.bash_history` через `cast send --private-key $OPERATOR_PRIVATE_KEY` commands. Cleanup recommended:
+
+```bash
+history -c
+rm ~/.bash_history
+```
+
+---
+
+## 9. Plan forward — naступні sceноs
+
+### Option A — Phase 2 closure (ATECC608B hardware integration)
+
+**Blocked на:** hardware delivery (~4 weeks Тарас орієнтує). Тарас's primary track.
+
+**Items:**
+- ATECC608B breakout boards (3-5 шт), $15-25 each via AliExpress
+- cryptoauthlib Python integration (provisioning script)
+- Edge firmware: P-256 sign through HSM замість software
+- Provisioning ceremony documented
+
+**Когда:** як тільки hardware прибуде. Тарас drive.
+
+### Option B — Phase 3 (Operational security, 2-3 тижні)
+
+**Не blocked.** Petro+Олександр work.
+
+**Items:**
+- Gnosis Safe deploy (2-of-3 multisig)
+- Migrate DEFAULT_ADMIN_ROLE з EOA на Safe (V3, DeviceRegistry)
+- TimelockController (48-72h delay для critical actions)
+- Operational runbooks (incident response, key rotation, recovery)
+- Hardware key storage (Ledger × multisig members, $60-100 each)
+- Bug bounty programme (Immunefi low-mid, $10-50K escrow)
+
+**Real fault tolerance** — поточно ВСІ admin actions на single EOA (`0xD1Cb...3f5f`). Single point of failure.
+
+### Option C — Phase 4 (Cross-validation з external reality, per v1.4)
+
+**Не blocked.** Може бути parallel з Phase 3.
+
+**Items per v1.4 (scope reduced):**
+- Open-Meteo Solar Radiation API integration
+- NASA POWER як second source
+- PVGIS як third source
+- EnsembleProvider — median + std deviation flag
+- TimescaleDB extension для PostgreSQL (per-device history)
+- Statistical drift detection (rolling z-score)
+- Post-disconnection submission verification через 3 архіви
+
+**Excluded від MVP per v1.4:**
+- ENTSO-E grid data → after MVP
+- PostGIS + geographic neighbors → after MVP
+- Weighted anomaly score → after MVP
+- Quarantine workflow з людською перевіркою → after MVP
+
+**Cost:** $0/month (всі 3 джерела free для commercial).
+
+### Decision points (Petro)
+
+1. **Phase order** — A → B → C? B || C parallel? Or just C first since A blocked on hardware?
+2. **Multisig members** — Petro + Олександр + ?. Third party identification. Може зайняти time на trust-building з external person.
+3. **Phase 4 implementation owner** — Petro full-time? Or split з Олександром?
+4. **Production timeline target** — конкретна дата для mainnet (Phase 8)?
+
+---
+
+## 10. Quick reference — useful commands
+
+### Build + test
+
+```bash
+cd ~/projects/infraveritas-energy
+
+# Aggregator
+cd aggregator
+npm run build              # tsc compile
+npm test                   # 23 tests
+
+# Contracts
+cd contracts
+forge build --silent       # compile все
+forge test                 # 85 tests
+
+# Edge
+cd edge
+source .venv/bin/activate
+pytest                     # ~59 tests
+```
+
+### Smoke test (real Sepolia E2E)
+
+```bash
+# Aggregator running у live mode? Check:
+curl -s http://localhost:3000/health | jq
+
+# If not running — start:
+cd ~/projects/infraveritas-energy/aggregator
+node dist/main.js &
+
+# Edge smoke test (real submit)
+cd ~/projects/infraveritas-energy/edge
+source .venv/bin/activate
+python scripts/sepolia_smoke.py
+```
+
+### Pin checks
+
+```bash
+# bb tooling versions
+bb --version    # MUST be 5.0.0-nightly.20260324
+cat aggregator/node_modules/@aztec/bb.js/package.json | grep version  # MUST match bb CLI
+
+# Operator wallet balance
+cd contracts && set -a; source ../aggregator/.env; set +a
+cast balance --ether 0xD1Cb30374a2D0D1B3fd9830eAAFf527D5FC13f5f --rpc-url $RPC_URL
+```
+
+### Etherscan links (most useful)
+
+- V3 proxy: https://sepolia.etherscan.io/address/0xf21d900e43214b0abf489f8d6862352aabb09da3
+- Operator wallet (всі recent activities): https://sepolia.etherscan.io/address/0xD1Cb30374a2D0D1B3fd9830eAAFf527D5FC13f5f
+
+---
+
+## 11. Open items для cleanup (low priority)
+
+- `contracts/broadcast/` — optionally gitignore (deploy logs з sensitive data)
+- `~/.bash_history` sanitize (OPERATOR_PRIVATE_KEY appearances)
+- Old branches local cleanup (`taras-tests`, `taras-tests-v2` — already merged via tests/v3-foundry-suite remote, can delete local)
+
+---
+
+## End of brief
+
+Якщо ця сесія була "Phase 1 closure", наступна логічно — **decision point на phase order**, тоді execution по chosen track. Petro drive choice.
+
+Final commit на main: `f65cafc`. Все pushed, документовано, verified. 
+
+Sleep well, partner.
