@@ -1,0 +1,81 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployedAt": "2026-05-14T15:13:36Z",
+  "deployer": "0xD1Cb30374a2D0D1B3fd9830eAAFf527D5FC13f5f",
+  "operator": "0xD1Cb30374a2D0D1B3fd9830eAAFf527D5FC13f5f",
+  "contracts": {
+    "deviceRegistry": {
+      "address": "0x6249935e8f293cac2a7c4ce3717a14a8b1e83e03",
+      "deploymentTx": "0xd526f380bf147239d962015d01548d5faf367feb4a080ea3e5cee35fdbcca6ff",
+      "deploymentBlock": 10851844,
+      "etherscan": "https://sepolia.etherscan.io/address/0x6249935e8f293cac2a7c4ce3717a14a8b1e83e03"
+    },
+    "v3Implementation": {
+      "address": "0xebff710df1a22bb877aac9055b698f68b0ed2639",
+      "deploymentTx": "0x14be6c76c2778df20169d24356e39b7c04235adf8b8a27250d5f1896bb29a2d5",
+      "deploymentBlock": 10851844,
+      "etherscan": "https://sepolia.etherscan.io/address/0xebff710df1a22bb877aac9055b698f68b0ed2639"
+    },
+    "v3Proxy": {
+      "address": "0xf21d900e43214b0abf489f8d6862352aabb09da3",
+      "deploymentTx": "0x37c8cb1719f37fd2ac110517af3c6254c1f54122ae510d8075c1ebc4309628dc",
+      "deploymentBlock": 10851844,
+      "etherscan": "https://sepolia.etherscan.io/address/0xf21d900e43214b0abf489f8d6862352aabb09da3",
+      "note": "ERC1967Proxy fronting v3Implementation. Interact with V3 at this address."
+    },
+    "honkVerifier": {
+      "address": "0xaf5bfa012d879d6fa87ccca01131f92d52292dc1",
+      "deploymentTx": "0x277acdc542455b5a6291ef23360ac6b6e9dcb4f89b552e3df9b6c32b5f74e232",
+      "deploymentBlock": 10851814,
+      "etherscan": "https://sepolia.etherscan.io/address/0xaf5bfa012d879d6fa87ccca01131f92d52292dc1"
+    },
+    "honkVerifierLibraries": {
+      "note": "Linked libraries split out of HonkVerifier to fit the EIP-170 24,576-byte runtime limit (see commit 4f2f34b). Required for HonkVerifier to function.",
+      "honkVerificationKey": {
+        "address": "0x2a45b2d4fa7b99905b386a42c5aaae083b507db0",
+        "deploymentTx": "0x9075fe35006c317edd836bbdf37ea3bc57f11021141fa51f7b8963632396a56d",
+        "deploymentBlock": 10851814,
+        "etherscan": "https://sepolia.etherscan.io/address/0x2a45b2d4fa7b99905b386a42c5aaae083b507db0"
+      },
+      "zkTranscriptLib": {
+        "address": "0x9ecef61516c626cdf9e9ca2ffc1b7bb10cfe427e",
+        "deploymentTx": "0x3d6c9b946e8f89f4eb39edd930e5a3d9bbf9680ce1214bcb297e737cb1bec008",
+        "deploymentBlock": 10851814,
+        "etherscan": "https://sepolia.etherscan.io/address/0x9ecef61516c626cdf9e9ca2ffc1b7bb10cfe427e"
+      },
+      "relationsLib": {
+        "address": "0x58445712ef81f2bdf566641a8bdfdc7afcec0e28",
+        "deploymentTx": "0xec7fdb6bd5eefed16632f7cb30126348920889d4e6532ed0e3840ef70573dcc5",
+        "deploymentBlock": 10851814,
+        "etherscan": "https://sepolia.etherscan.io/address/0x58445712ef81f2bdf566641a8bdfdc7afcec0e28"
+      }
+    },
+    "p256Verifier": {
+      "address": "0xc2b78104907F722DABAc4C69f826a522B2754De4",
+      "note": "External Daimo canonical RIP-7212 P-256 verifier. Not deployed by this run; pre-existing on Sepolia."
+    }
+  },
+  "verificationChecks": {
+    "adminHasDefaultAdminRole": true,
+    "operatorHasOperatorRole": true,
+    "v3KnowsCorrectDeviceRegistry": true,
+    "v3KnowsCorrectP256Verifier": true,
+    "v3KnowsCorrectHonkVerifier": true
+  },
+  "etherscanVerification": {
+    "deviceRegistry": "verified",
+    "v3Implementation": "verified",
+    "v3Proxy": "verified",
+    "honkVerifier": "verified",
+    "honkVerificationKey": "verified",
+    "zkTranscriptLib": "verified",
+    "relationsLib": "verified"
+  },
+  "notes": [
+    "HonkVerifier compiled to 27,749 B runtime (exceeds EIP-170 24,576 B). Fixed in commit 4f2f34b by changing HonkVerificationKey.loadVerificationKey and RelationsLib.accumulateRelationEvaluations from internal to public, so the libraries deploy separately. Visibility-only change; no cryptographic constants or logic touched.",
+    "The V3 test suite uses MockHonkVerifier and does NOT exercise the real bb-generated HonkVerifier. The deployed verifier must still be validated against a real proof fixture before mainnet use.",
+    "Admin role transfer to a multisig is out of scope for this deployment (security-critical; handled separately by Petro).",
+    "deployer and operator are the same address for this MVP testnet deployment."
+  ]
+}
