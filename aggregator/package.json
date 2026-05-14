@@ -6,9 +6,10 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "abi:gen": "tsx scripts/generate-abi.ts"
+    "abi:gen": "tsx scripts/generate-abi.ts",
+    "start": "node dist/main.js"
   },
   "keywords": [],
   "author": "",

@@ -1,0 +1,39 @@
+# Local dev / staging compose file for the aggregator.
+#
+# Quick start (mock chain mode):
+#   docker compose up --build
+#
+# Live chain mode (after Sepolia deploy):
+#   create .env with V3_ADDRESS, RPC_URL, OPERATOR_PRIVATE_KEY
+#   docker compose up --build
+#
+# Stop:
+#   docker compose down
+
+services:
+  aggregator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: infraveritas-energy/aggregator:dev
+    container_name: infraveritas-aggregator
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      PORT: 3000
+      HOST: 0.0.0.0
+      # Chain config — read from .env if present; absent vars trigger mock mode
+      V3_ADDRESS: ${V3_ADDRESS:-}
+      RPC_URL: ${RPC_URL:-}
+      OPERATOR_PRIVATE_KEY: ${OPERATOR_PRIVATE_KEY:-}
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://localhost:3000/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
