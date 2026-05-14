@@ -55,3 +55,5 @@ zk/circuits/legacy/*/*.log
 # === Lib internal lock files (vendored deps) ===
 contracts/lib/*/package-lock.json
 contracts/lib/*/yarn.lock
+edge-test-key.pem
+edge-test-key.pem
