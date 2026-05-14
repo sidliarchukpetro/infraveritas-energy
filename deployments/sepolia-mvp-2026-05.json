@@ -108,9 +108,9 @@
     "v3Proxy": "verified",
     "honkVerifierDeprecated": "verified",
     "honkVerifierDeprecatedLibraries": "verified",
-    "honkVerifier": "pending",
-    "honkVerifierLibraries": "pending",
-    "p256VerifierAdapter": "pending"
+    "honkVerifier": "verified",
+    "honkVerifierLibraries": "verified",
+    "p256VerifierAdapter": "verified"
   },
   "notes": [
     "Phase 1 (real on-chain E2E) closed 2026-05-14 with commit c58da32. Pipeline edge -> aggregator -> V3.submitProof -> ProofSubmitted event functional.",
