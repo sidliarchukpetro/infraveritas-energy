@@ -14,17 +14,19 @@ license = {text = "UNLICENSED"}
 dependencies = [
     "cryptography>=42.0.0",
     "circomlibpy>=1.0.0",
+    "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]
 test = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
+    "respx>=0.21.0",
 ]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["hal*"]
+include = ["hal*", "network*"]
 exclude = ["tests*", "legacy*"]
 
 [tool.pytest.ini_options]
