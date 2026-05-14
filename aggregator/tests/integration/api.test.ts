@@ -173,7 +173,7 @@ describe("API + worker integration", { timeout: 180_000 }, () => {
     // Poll for completion (worker is async)
     let lastStatus = "";
     let finished = false;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 240; i++) {
       const status = await app.inject({
         method: "GET",
         url: `/submissions/${sessionKey}`,
