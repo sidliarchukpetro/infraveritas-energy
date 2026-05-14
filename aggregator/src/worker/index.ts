@@ -1,12 +1,19 @@
 /**
  * Submission worker — drains the queue and runs the full pipeline:
- *   payload + signature → witness → Honk proof → local verify → V3 submitProof.
+ *   payload + signature → [P-256 pre-check] → witness → Honk proof
+ *                       → local verify → V3 submitProof.
  *
  * Spec: docs/specs/aggregator_design.md §5 (queue/worker module).
  *
- * Concurrency: single-flight by design (one `drain()` at a time). The
- * `isProcessing` flag is the gate. Multiple incoming `enqueued` events
- * coalesce into one drain pass.
+ * Pre-check rationale: P-256 verify is ~1ms; witness+proof is ~3s. By
+ * verifying the signature locally first, we save ~3000× CPU per bad
+ * submission. The Noir circuit's verify_signature performs the SAME
+ * check internally, so a payload that passes pre-check will pass the
+ * circuit's check; conversely, a payload that fails pre-check would
+ * also fail the circuit constraint — we just fail faster.
+ *
+ * Concurrency: single-flight by design. One `drain()` at a time.
+ * Multiple incoming `enqueued` events coalesce into one drain pass.
  *
  * Error routing — three categories:
  *   QUARANTINE: bad data on the wire (invalid sig, bad proof, replay,
@@ -16,12 +23,11 @@
  *   ALERT:     misconfiguration/protocol bug (wrong operator key,
  *     reentrancy detected). Fail terminal; ops must intervene.
  *
- * Mock mode: if no chainClient supplied, worker still runs witness +
- * proof + local verify and reports `kind: "mock"`. Useful for dev before
- * Sepolia deployment is ready — flips to live mode when V3_ADDRESS
- * is set in env.
+ * Mock mode: if no chainClient supplied, worker still runs pre-check
+ * + witness + proof + local verify, but does not submit on-chain.
  */
 
+import { p256 } from "@noble/curves/nist.js";
 import { computePayloadHash } from "../verify/canonical.js";
 import { generateWitness } from "../prover/witness.js";
 import { generateProof, verifyProofLocally } from "../prover/honk.js";
@@ -114,8 +120,29 @@ export class SubmissionWorker {
   private async process(data: SubmissionJob): Promise<WorkerResult> {
     const payloadHash = await computePayloadHash(data.payload);
 
+    // Pre-check: P-256 verify locally (~1ms) before expensive witness/proof (~3s).
+    // This runs the same check the Noir circuit will perform — failing fast
+    // saves 3000× CPU per bogus submission. Uses prehash:false to match the
+    // edge signer (Prehashed(SHA256()) in signing.py) and the Noir verifier.
+    const pubkeyWithPrefix = new Uint8Array(65);
+    pubkeyWithPrefix[0] = 0x04;
+    pubkeyWithPrefix.set(data.pubkey, 1);
+    const sigValid = p256.verify(
+      data.signature,
+      payloadHash,
+      pubkeyWithPrefix,
+      { prehash: false },
+    );
+    if (!sigValid) {
+      throw new ChainSubmissionError(
+        "InvalidP256Signature",
+        "Pre-check failed: P-256 signature does not verify against payload hash",
+      );
+    }
+
     // Witness generation runs all 4 circuit checks (Poseidon, metadata,
-    // P-256 verify, energy sum). Throws if any check fails.
+    // P-256 verify, energy sum). With pre-check passing, signature check
+    // here is redundant but defensive — circuit is the authoritative validator.
     const { witness } = await generateWitness({
       payload: data.payload,
       signature: data.signature,
@@ -158,19 +185,11 @@ export class SubmissionWorker {
         });
       } else if (RETRY_CODES.has(err.code)) {
         this.queue.fail(jobId, err.code, err.message);
-        this.logger?.warn({
-          event: "job-retry",
-          id: jobId,
-          code: err.code,
-        });
+        this.logger?.warn({ event: "job-retry", id: jobId, code: err.code });
       } else {
         // ALERT codes: AccessControlUnauthorizedAccount, ReentrancyGuardReentrantCall
         this.queue.fail(jobId, err.code, err.message);
-        this.logger?.error({
-          event: "job-alert",
-          id: jobId,
-          code: err.code,
-        });
+        this.logger?.error({ event: "job-alert", id: jobId, code: err.code });
       }
       return;
     }

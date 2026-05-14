@@ -14,21 +14,79 @@
  *   - signature, public_key — lowercase hex, exactly 128 chars (64 bytes).
  *   - readings — exactly 100 items.
  *
- * The handler does CHEAP validation only (shape, lengths, basic ranges).
- * Heavy work (Poseidon hash, P-256 verify, ZK proof) deferred to worker.
+ * Validation tiers (in order):
+ *   1. zod schema  — shape, lengths, regex
+ *   2. zod refine  — uint64/int64 bounds, geographic bounds, tamper_flag {0,1}
+ *   3. (worker)    — P-256 signature pre-verify before witness/proof gen
+ *
+ * Rate limiting: 10 submissions per IP per minute by default. Tests pass
+ * `rateLimit: false` to disable. Override via opts.rateLimit = {max, timeWindow}.
  */
 
 import Fastify, { type FastifyInstance } from "fastify";
+import rateLimit from "@fastify/rate-limit";
 import { z } from "zod";
-import { keccak256, toBytes } from "viem";
+import { keccak256 } from "viem";
 import type { CanonicalPayload, Reading } from "../verify/canonical.js";
 import { InMemoryQueue, type JobRecord } from "../queue/index.js";
 
+// ---------- Numeric bounds ----------
+
+const U64_MAX = 0xFFFFFFFFFFFFFFFFn;
+const I64_MIN = -(1n << 63n);
+const I64_MAX = (1n << 63n) - 1n;
+const LAT_MAX_E7 = 900_000_000n;   // ±90°  scaled by 1e7
+const LON_MAX_E7 = 1_800_000_000n; // ±180° scaled by 1e7
+
 // ---------- Schemas ----------
 
-const u64String = z.string().regex(/^\d+$/, "expected decimal uint64");
-const i64String = z.string().regex(/^-?\d+$/, "expected decimal int64");
-const hex128 = z.string().regex(/^[0-9a-f]{128}$/, "expected 128 lowercase hex chars");
+const u64String = z
+  .string()
+  .regex(/^\d+$/, "expected decimal uint64")
+  .refine(
+    (s) => {
+      try {
+        return BigInt(s) <= U64_MAX;
+      } catch {
+        return false;
+      }
+    },
+    "value exceeds uint64 range (2^64-1)",
+  );
+
+const i64String = z
+  .string()
+  .regex(/^-?\d+$/, "expected decimal int64")
+  .refine(
+    (s) => {
+      try {
+        const n = BigInt(s);
+        return n >= I64_MIN && n <= I64_MAX;
+      } catch {
+        return false;
+      }
+    },
+    "value exceeds int64 range",
+  );
+
+const latE7Schema = i64String.refine((s) => {
+  const n = BigInt(s);
+  return n >= -LAT_MAX_E7 && n <= LAT_MAX_E7;
+}, "lat_e7 must be in [-90°, +90°] (scaled by 1e7)");
+
+const lonE7Schema = i64String.refine((s) => {
+  const n = BigInt(s);
+  return n >= -LON_MAX_E7 && n <= LON_MAX_E7;
+}, "lon_e7 must be in [-180°, +180°] (scaled by 1e7)");
+
+const tamperFlagSchema = u64String.refine(
+  (s) => s === "0" || s === "1",
+  "tamper_flag must be 0 or 1",
+);
+
+const hex128 = z
+  .string()
+  .regex(/^[0-9a-f]{128}$/, "expected 128 lowercase hex chars");
 
 const readingSchema = z.object({
   voltage_mv: u64String,
@@ -40,10 +98,10 @@ const payloadSchema = z.object({
   device_id: u64String,
   session_id: u64String,
   epoch_start_ts: u64String,
-  lat_e7: i64String,
-  lon_e7: i64String,
+  lat_e7: latE7Schema,
+  lon_e7: lonE7Schema,
   light_level: u64String,
-  tamper_flag: u64String,
+  tamper_flag: tamperFlagSchema,
   readings: z.array(readingSchema).length(100),
 });
 
@@ -102,8 +160,6 @@ function computeSessionKey(deviceId: bigint, sessionId: bigint): string {
   return keccak256(buf);
 }
 
-// ---------- Serialization helpers (bigint-safe JSON) ----------
-
 function serializeJob(job: JobRecord<SubmissionJob>) {
   return {
     id: job.id,
@@ -118,24 +174,48 @@ function serializeJob(job: JobRecord<SubmissionJob>) {
 
 // ---------- Server builder ----------
 
+export interface RateLimitConfig {
+  max?: number;
+  timeWindow?: string | number;
+}
+
 export interface BuildServerOptions {
   queue: InMemoryQueue<SubmissionJob>;
   logger?: boolean | object;
+  /** Set to false to disable rate limiting (tests). Default: 10/min/IP. */
+  rateLimit?: false | RateLimitConfig;
 }
 
-export function buildServer(opts: BuildServerOptions): FastifyInstance {
+export async function buildServer(
+  opts: BuildServerOptions,
+): Promise<FastifyInstance> {
   const app = Fastify({
     logger: opts.logger ?? { level: "info" },
-    bodyLimit: 256 * 1024, // 256 KB — accommodates 2456-byte payload + sig + pubkey + JSON overhead
+    bodyLimit: 256 * 1024,
   });
 
-  app.get("/health", async () => {
-    return {
-      status: "ok",
-      queue: opts.queue.size(),
-      uptime_s: Math.floor(process.uptime()),
-    };
-  });
+  if (opts.rateLimit !== false) {
+    const config = opts.rateLimit ?? {};
+    await app.register(rateLimit, {
+      max: config.max ?? 10,
+      timeWindow: config.timeWindow ?? "1 minute",
+    });
+  }
+
+  app.get(
+    "/health",
+    {
+      // Health probes must never be rate-limited
+      config: { rateLimit: false },
+    },
+    async () => {
+      return {
+        status: "ok",
+        queue: opts.queue.size(),
+        uptime_s: Math.floor(process.uptime()),
+      };
+    },
+  );
 
   app.post("/submissions", async (request, reply) => {
     const parsed = submissionSchema.safeParse(request.body);
@@ -149,7 +229,6 @@ export function buildServer(opts: BuildServerOptions): FastifyInstance {
     const payload = parsePayload(parsed.data);
     const sessionKey = computeSessionKey(payload.device_id, payload.session_id);
 
-    // Deduplication — same sessionKey can't be enqueued twice
     if (opts.queue.get(sessionKey)) {
       return reply.code(409).send({
         error: "DuplicateSessionKey",
@@ -173,13 +252,16 @@ export function buildServer(opts: BuildServerOptions): FastifyInstance {
     });
   });
 
-  app.get<{ Params: { id: string } }>("/submissions/:id", async (request, reply) => {
-    const record = opts.queue.get(request.params.id);
-    if (!record) {
-      return reply.code(404).send({ error: "NotFound" });
-    }
-    return serializeJob(record);
-  });
+  app.get<{ Params: { id: string } }>(
+    "/submissions/:id",
+    async (request, reply) => {
+      const record = opts.queue.get(request.params.id);
+      if (!record) {
+        return reply.code(404).send({ error: "NotFound" });
+      }
+      return serializeJob(record);
+    },
+  );
 
   return app;
 }

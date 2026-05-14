@@ -89,7 +89,7 @@ describe("API + worker integration", { timeout: 180_000 }, () => {
 
   beforeAll(async () => {
     queue = new InMemoryQueue<SubmissionJob>();
-    app = buildServer({ queue, logger: false });
+    app = await buildServer({ queue, logger: false, rateLimit: false });
     // Mock-mode worker: no chainClient, but still runs witness + proof + verify.
     void new SubmissionWorker(queue, null);
     await app.ready();

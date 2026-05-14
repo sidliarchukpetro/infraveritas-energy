@@ -45,7 +45,7 @@ function buildChainClient(): V3ChainClient | null {
 async function main(): Promise<void> {
   const queue = new InMemoryQueue<SubmissionJob>();
   const chainClient = buildChainClient();
-  const app = buildServer({ queue });
+  const app = await buildServer({ queue });
 
   // Worker self-registers as listener on queue.
   // The `void` discards the unused-binding warning while keeping the side effect.
