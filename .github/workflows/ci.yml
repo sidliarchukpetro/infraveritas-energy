@@ -1,10 +1,15 @@
 name: CI
-
 on:
   push:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+
+# Opt into Node.js 24 for JavaScript actions (Node 20 deprecated, forced switch
+# 2026-06-02). When all consumed actions ship Node 24 native versions this env
+# can be removed.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   forge-test:
@@ -13,23 +18,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
-
       - name: Show versions
         run: forge --version
-
       - name: Forge build
         run: forge build
         working-directory: contracts
-
       - name: Forge test
         run: forge test -vvv
         working-directory: contracts
-
   slither:
     name: Slither static analysis
     runs-on: ubuntu-latest
@@ -37,32 +37,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
-
       - name: Install Slither
         run: pip install slither-analyzer==0.11.5
-
       - name: Forge build for Slither
         run: forge build
         working-directory: contracts
-
       - name: Run Slither on new contracts (V3 + DeviceRegistry, blocking)
         run: slither . --config-file slither.config.json
         working-directory: contracts
-      - name: Run Slither on legacy v2 (informational, non-blocking)
-        run: slither legacy/v2/EnergyProofRegistry.sol --config-file slither.config.json
-        working-directory: contracts
-        continue-on-error: true
-
   edge-test:
     name: Edge HAL Python tests
     runs-on: ubuntu-latest
