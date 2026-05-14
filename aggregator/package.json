@@ -7,7 +7,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "abi:gen": "tsx scripts/generate-abi.ts"
   },
   "keywords": [],
   "author": "",
@@ -23,6 +24,7 @@
     "@aztec/bb.js": "^4.2.1",
     "@noble/curves": "^2.2.0",
     "@noir-lang/noir_js": "^1.0.0-beta.21",
-    "circomlibjs": "^0.1.7"
+    "circomlibjs": "^0.1.7",
+    "viem": "^2.48.11"
   }
 }
