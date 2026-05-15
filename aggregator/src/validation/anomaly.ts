@@ -19,6 +19,12 @@
  */
 
 import type { EnsembleResult } from "./weather/ensemble.js";
+import type { DriftSummary } from "./statistics.js";
+
+// DriftSummary defined у statistics.ts (де він виробляється);
+// re-exported тут для backward compat і convenience для callers що уже
+// імпортують з anomaly.js
+export type { DriftSummary } from "./statistics.js";
 
 // ---------- Types ----------
 
@@ -38,11 +44,6 @@ export type AnomalyFlag =
 export interface AnomalyInputPayload {
   tamper_flag: bigint;
   total_energy_mwh: bigint;
-}
-
-export interface DriftSummary {
-  drift: boolean;
-  magnitude: number;
 }
 
 export interface AnomalyResult {
