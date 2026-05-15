@@ -213,8 +213,68 @@ Worker integration. Це modify-existing-files drop, не нові файли.
 
 ---
 
-## 7. Сумарно
+## 7. Сумарно (станом на 2026-05-15 17:36 UTC)
 
-Phase 4 compute+DB layer закритий. Production wiring відкладений на Тараса (Postgres). Жоден з compute модулів не require integration test на реальній БД щоб бути правильним — структурне testing на mocks дає високу confidence. Реальна integration зробиться у week 4c-2 одним drop-ом коли Тарас підтвердить.
+Phase 4 architectural — **FULLY CLOSED**. Real Sepolia + Postgres end-to-end працює. Тарас підтвердив у власній environment, commit `4381da0`:
 
-3 critical learnings — записані у memory і future-proofing.
+- Pipeline: edge → aggregator → V3 (Sepolia) → 3 weather APIs → statistics → TimescaleDB hypertable
+- Validation default: enabled коли DATABASE_URL set, disabled inakshe
+- ~27 секунд end-to-end (proof gen 5s + chain submit 15s + validation persist 7s)
+- Один row у `device_readings_history` з ensemble_status, anomaly_flag, chain_submitted=true
+
+3+ critical learnings — записані у memory і future-proofing.
+
+---
+
+## 8. Operational notes (production deployment)
+
+Через real-DB smoke test (Тарас, 2026-05-15) виявлено кілька operational quirks які треба знати при deployment.
+
+### 8.1 Deployment recipe — start Postgres + aggregator
+
+Compose файли потрібно merge — base у `aggregator/`, Phase 4 overlay у `infra/`:
+
+```bash
+docker compose --env-file .env \
+  -f aggregator/docker-compose.yml \
+  -f infra/docker-compose.phase4.yml \
+  up -d postgres
+```
+
+Окремий `-f infra/docker-compose.phase4.yml` БЕЗ base aggregator compose не працює.
+
+### 8.2 DATABASE_URL pattern
+
+Compose defaults: `POSTGRES_USER=infraveritas`, `POSTGRES_DB=infraveritas_energy` (НЕ стандартний `postgres:postgres@.../postgres`).
+
+Connection URL pattern:
+
+```
+DATABASE_URL=postgres://infraveritas:<password>@127.0.0.1:5432/infraveritas_energy
+```
+
+### 8.3 POSTGRES_PASSWORD requirement — URL-safe characters only
+
+Поточна архітектура — `new Pool({connectionString})` з URL string. Це ламається коли password містить символи `/` або `+` (типові у standard base64). Помилка: `validation-failed err: "Invalid URL"` runtime.
+
+**Вимога:** POSTGRES_PASSWORD повинен бути **URL-safe**. Безпечні варіанти:
+
+- Hex (`openssl rand -hex 32`)
+- base64url (без padding) — варіант base64 з `-_` замість `+/`
+
+**Backlog refactor (post-MVP):** перевести `new Pool({user, password, host, database, port})` form замість URL string — robust до будь-яких password chars.
+
+### 8.4 Sepolia smoke test — known issue
+
+`edge/scripts/sepolia_smoke.py` має hardcoded `epoch_start_ts=1_778_000_000`. Після першого успішного run V3.lastSubmissionTimestamp = це значення; всі наступні runs reverт InvalidTimestamp (V3 enforces monotonic timestamps).
+
+**Workaround:** manual patch на `int(time.time())` перед re-run.
+
+**TODO:** додати CLI flag `--epoch-start-ts` або default до `time.time()`. Tracked у issue [TBD].
+
+### 8.5 Weather APIs — degraded status is common
+
+`ensemble_status='degraded'` (тільки 1 з 3 providers responded) — нормальна поведінка на free tier. NASA POWER і PVGIS мають load обмеження для unauthenticated traffic. У production:
+
+- Якщо багато submissions з `degraded` — додати retry logic або зареєструватись для API keys
+- `unavailable` (всі 3 fail) — варто alert ops, але submission все одно проходить на chain
