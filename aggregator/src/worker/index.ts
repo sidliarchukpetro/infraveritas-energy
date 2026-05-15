@@ -1,7 +1,7 @@
 /**
  * Submission worker — drains the queue and runs the full pipeline:
  *   payload + signature → [P-256 pre-check] → witness → Honk proof
- *                       → local verify → V3 submitProof.
+ *                       → local verify → V3 submitProof → [Phase 4 validation].
  *
  * Spec: docs/specs/aggregator_design.md §5 (queue/worker module).
  *
@@ -25,11 +25,18 @@
  *
  * Mock mode: if no chainClient supplied, worker still runs pre-check
  * + witness + proof + local verify, but does not submit on-chain.
+ *
+ * Phase 4 validation (optional): if validationPipeline supplied,
+ * cross-validation + statistics + anomaly + persistence run AFTER
+ * chain submit як **best-effort**. Validation failure does NOT block
+ * submission — chain remains source of truth, hypertable є observability
+ * layer. If validationPipeline === undefined, behavior identical to pre-Phase-4.
  */
 
 import { p256 } from "@noble/curves/nist.js";
+import { hexToBytes } from "viem";
 import { computePayloadHash } from "../verify/canonical.js";
-import { generateWitness } from "../prover/witness.js";
+import { computeTotalEnergy, generateWitness } from "../prover/witness.js";
 import { generateProof, verifyProofLocally } from "../prover/honk.js";
 import {
   ChainSubmissionError,
@@ -38,6 +45,10 @@ import {
 } from "../chain/submit.js";
 import type { InMemoryQueue, JobRecord } from "../queue/index.js";
 import type { SubmissionJob } from "../api/server.js";
+import type {
+  ValidationPipeline,
+  ValidationOutcome,
+} from "../validation/pipeline.js";
 
 const QUARANTINE_CODES = new Set<string>([
   "DeviceNotActive",
@@ -58,8 +69,13 @@ const RETRY_CODES = new Set<string>([
 ]);
 
 export type WorkerResult =
-  | { kind: "submitted"; tx: SubmissionResult }
-  | { kind: "mock"; proofBytes: number; verified: true };
+  | { kind: "submitted"; tx: SubmissionResult; validation?: ValidationOutcome }
+  | {
+      kind: "mock";
+      proofBytes: number;
+      verified: true;
+      validation?: ValidationOutcome;
+    };
 
 export interface WorkerLogger {
   info(msg: object): void;
@@ -74,6 +90,7 @@ export class SubmissionWorker {
     private readonly queue: InMemoryQueue<SubmissionJob>,
     private readonly chainClient: V3ChainClient | null,
     private readonly logger?: WorkerLogger,
+    private readonly validationPipeline?: ValidationPipeline,
   ) {
     queue.on("enqueued", () => {
       this.drain().catch((err) => {
@@ -110,6 +127,13 @@ export class SubmissionWorker {
         event: "job-complete",
         id: job.id,
         kind: result.kind,
+        validation: result.validation
+          ? {
+              ensembleStatus: result.validation.ensemble.status,
+              flags: result.validation.anomaly.flags,
+              reviewRequired: result.validation.anomaly.reviewRequired,
+            }
+          : "disabled",
         ms: Date.now() - t0,
       });
     } catch (err) {
@@ -161,17 +185,60 @@ export class SubmissionWorker {
       );
     }
 
-    if (this.chainClient) {
-      const tx = await this.chainClient.submitProof({
-        payload: data.payload,
-        payloadHash,
-        signature: data.signature,
-        devicePubkey: data.pubkey,
-        proof,
-      });
-      return { kind: "submitted", tx };
+    // Chain submit (or mock if no chain client). Errors here propagate to
+    // processOne→handleError so submission counts as failed.
+    const baseResult: WorkerResult = this.chainClient
+      ? {
+          kind: "submitted",
+          tx: await this.chainClient.submitProof({
+            payload: data.payload,
+            payloadHash,
+            signature: data.signature,
+            devicePubkey: data.pubkey,
+            proof,
+          }),
+        }
+      : {
+          kind: "mock",
+          proofBytes: proof.proof.length,
+          verified: true,
+        };
+
+    // Phase 4: best-effort validation. Failure does NOT block chain submission
+    // — chain is source of truth, hypertable is observability layer. Persist
+    // the outcome so admin can correlate post-hoc.
+    let validation: ValidationOutcome | undefined;
+    if (this.validationPipeline) {
+      try {
+        const totalEnergyMwh = computeTotalEnergy(data.payload);
+        const txHash =
+          baseResult.kind === "submitted"
+            ? hexToBytes(baseResult.tx.txHash)
+            : undefined;
+        validation = await this.validationPipeline.process(
+          data.payload,
+          totalEnergyMwh,
+          { txHash },
+        );
+      } catch (err) {
+        this.logger?.warn({
+          event: "validation-failed",
+          err: err instanceof Error ? err.message : String(err),
+        });
+        // validation залишається undefined; submission успішна.
+      }
     }
-    return { kind: "mock", proofBytes: proof.proof.length, verified: true };
+
+    // Merge validation into result. Discriminated union — narrow then build.
+    if (baseResult.kind === "submitted") {
+      return { kind: "submitted", tx: baseResult.tx, validation };
+    }
+    return {
+      kind: "mock",
+      proofBytes: baseResult.proofBytes,
+      verified: true,
+      validation,
+    };
   }
 
   private handleError(jobId: string, err: unknown): void {
