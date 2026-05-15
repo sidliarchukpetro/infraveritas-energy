@@ -218,3 +218,84 @@ Worker integration. Це modify-existing-files drop, не нові файли.
 Phase 4 compute+DB layer закритий. Production wiring відкладений на Тараса (Postgres). Жоден з compute модулів не require integration test на реальній БД щоб бути правильним — структурне testing на mocks дає високу confidence. Реальна integration зробиться у week 4c-2 одним drop-ом коли Тарас підтвердить.
 
 3 critical learnings — записані у memory і future-proofing.
+
+---
+
+## 8. Deployment recipe — post week 4c-2 smoke test (2026-05-15)
+
+Зафіксовано після першого реального запуску Phase 4 pipeline на Windows + real Postgres (Тарас). Кожен пункт — реальна проблема, з якою зіткнулись, і її розв'язок.
+
+### 8.1 Two ways to give aggregator DB credentials
+
+Phase 4 compose (`infra/docker-compose.phase4.yml`) використовує defaults:
+- `POSTGRES_USER=infraveritas`
+- `POSTGRES_DB=infraveritas_energy`
+- `POSTGRES_PASSWORD` — обов'язково з `.env`
+
+**Preferred — окремі змінні середовища** (надійно до будь-яких спецсимволів у паролі):
+```
+POSTGRES_USER=infraveritas
+POSTGRES_PASSWORD=<будь-який пароль, включно з / + @ : тощо>
+POSTGRES_HOST=127.0.0.1     # опційно, default 127.0.0.1
+POSTGRES_PORT=5432          # опційно, default 5432
+POSTGRES_DB=infraveritas_energy  # опційно, default infraveritas_energy
+```
+
+Aggregator передає пароль як сирий рядок у `pg.Pool`, без парсингу URL — тому жодних обмежень на символи.
+
+**Legacy — `DATABASE_URL`** (зворотна сумісність; пароль має бути URL-safe):
+```
+DATABASE_URL=postgres://infraveritas:<URL-safe пароль>@127.0.0.1:5432/infraveritas_energy
+```
+
+Якщо задані обидва варіанти, aggregator використовує **окремі змінні**. Логіка вибору у `aggregator/src/main.ts::buildPoolConfig()`.
+
+**Не** `postgres://postgres:postgres@...` — юзера `postgres` у нашій БД не існує, його `psql -U postgres` не пустить.
+
+### 8.2 Password MUST be URL-safe
+
+`POSTGRES_PASSWORD` парситься pg-драйвером як URI. Символи що ламають URL — `/`, `@`, `:`, `?`, `#`, `&`, `+` — **сирими у паролі не можна**.
+
+Безпечні генератори:
+- ✅ hex: `openssl rand -hex 32` → 64 chars, тільки `[0-9a-f]`
+- ✅ url-safe base64: `python -c 'import secrets, base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("="))'`
+- ❌ `openssl rand -base64 32` — генерує `+`, `/`, `=` (зустрічається `/` → ламає URL)
+
+**Симптом** коли password містить непідходящий символ:
+- startup лог: `validation: "enabled"` (виглядає правильно)
+- при submission: `event: "validation-failed", err: "Invalid URL"`
+- hypertable: порожня (persistence не виконалась)
+- chain submission: пройшов (worker submit не залежить від DB)
+
+### 8.3 Working compose recipe (Windows)
+
+`docker-compose.yml` у корені репо **не існує** — основний у `aggregator/docker-compose.yml`. Робоча команда з кореня репо:
+
+```bash
+docker compose --env-file .env \
+  -f aggregator/docker-compose.yml \
+  -f infra/docker-compose.phase4.yml \
+  up -d postgres
+```
+
+Ключове:
+- `--env-file .env` **обов'язковий** — без нього docker compose шукає `.env` поряд з першим `-f` файлом (у `aggregator/`), не у корені репо
+- `.env` має бути **без BOM** — Windows PowerShell `Set-Content -Encoding UTF8` додає BOM, який ламає парсинг першого рядка змінних. Писати через ASCII або `.NET WriteAllText` з UTF-8 без BOM
+
+### 8.4 Verification queries
+
+З правильними credentials:
+```bash
+docker exec infraveritas-postgres psql -U infraveritas -d infraveritas_energy \
+  -c "\d device_readings_history"
+# Expected: 18 columns + 5 indexes
+
+docker exec infraveritas-postgres psql -U infraveritas -d infraveritas_energy \
+  -c "SELECT hypertable_name FROM timescaledb_information.hypertables;"
+# Expected: device_readings_history (1 row)
+```
+
+### 8.5 Smoke test gotchas
+
+- `edge/scripts/sepolia_smoke.py` тепер приймає `--epoch-start-ts <unix_seconds>` (за замовчуванням — поточний час). Без цього після першого успішного E2E `lastSubmissionTimestamp` на V3 фіксує epoch, і наступні запуски з тим самим значенням revert-ять `InvalidTimestamp`.
+- Локальний `edge/edge-test-key.pem` на кожній машині генерує **окрему** пару P-256 ключів. Перед smoke-тестом перевір `isAuthorized` у DeviceRegistry для свого pubkey — якщо ні, зареєструй (script сам виведе готову `cast send` команду у разі `DeviceNotActive`).
