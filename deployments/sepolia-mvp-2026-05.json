@@ -1,7 +1,7 @@
 {
   "network": "sepolia",
   "chainId": 11155111,
-  "lastUpdated": "2026-05-14T18:00:00Z",
+  "lastUpdated": "2026-05-15T17:36:26Z",
   "deployer": "0xD1Cb30374a2D0D1B3fd9830eAAFf527D5FC13f5f",
   "operator": "0xD1Cb30374a2D0D1B3fd9830eAAFf527D5FC13f5f",
   "contracts": {
@@ -93,7 +93,19 @@
       "location": "48.4517N, 25.5752E (Sniatyn, UA)",
       "registrationTx": "0xcd456a51d4ccd4a6f55763049792b72a7bb4e061440fb39ca42c32e4fadb92eb",
       "block": 10852155,
-      "purpose": "smoke test edge device (persistent key at edge/edge-test-key.pem)"
+      "registeredBy": "petro",
+      "purpose": "smoke test edge device on Petro's machine (persistent key at edge/edge-test-key.pem)"
+    },
+    {
+      "pubkey": "0xceae7822deb1acdfbd7cf6333d268e807696dcfbb86393654dd0dc0022b3bb69050c3e8e5f91cf1cdc8777e26121869596bc795468b54090213a3041e0eff178",
+      "latE7": 484517000,
+      "lonE7": 255752000,
+      "location": "48.4517N, 25.5752E (Sniatyn, UA)",
+      "registrationTx": "0x5c7a0f89e9ab7d43be5d76b299c0ff21558888b13a48d1d10d7058fdcfcff343",
+      "block": 10858502,
+      "registeredAt": "2026-05-15T17:30:12Z",
+      "registeredBy": "taras",
+      "purpose": "smoke test edge device on Taras's machine — Phase 4 week 4c-2 real-DB E2E verification (edge/edge-test-key.pem on a different machine has different key material than Petro's)"
     }
   ],
   "phase1FirstE2E": {
