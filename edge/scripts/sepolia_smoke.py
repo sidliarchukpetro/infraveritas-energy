@@ -76,7 +76,7 @@ def make_payload(session_id: int) -> CanonicalPayload:
     return CanonicalPayload(
         device_id=42,
         session_id=session_id,
-        epoch_start_ts=1_778_000_000,
+        epoch_start_ts=int(time.time()),
         lat_e7=484_517_000,   # ~48.45° N (Sniatyn)
         lon_e7=255_752_000,   # ~25.57° E
         light_level=5000,
