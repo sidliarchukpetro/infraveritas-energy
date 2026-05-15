@@ -249,6 +249,17 @@ function parsePVGISTime(time: string): number | null {
   const match = /^(\d{4})(\d{2})(\d{2}):(\d{2})(\d{2})$/.exec(time);
   if (!match) return null;
   const [, yyyy, mm, dd, hh, mn] = match;
+  // Under noUncheckedIndexedAccess match groups are typed string | undefined,
+  // even though successful regex match guarantees they're strings. Narrow explicitly.
+  if (
+    yyyy === undefined ||
+    mm === undefined ||
+    dd === undefined ||
+    hh === undefined ||
+    mn === undefined
+  ) {
+    return null;
+  }
   return Math.floor(
     Date.UTC(
       parseInt(yyyy, 10),

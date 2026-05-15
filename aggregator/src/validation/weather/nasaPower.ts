@@ -206,7 +206,7 @@ export class NASAPowerProvider implements IrradianceProvider {
       throw new ProviderError(this.name, "malformed", "empty series");
     }
 
-    let closestKey = keys[0];
+    let closestKey: string | undefined = undefined;
     let closestDelta = Infinity;
     let closestTs = 0;
 
@@ -221,7 +221,7 @@ export class NASAPowerProvider implements IrradianceProvider {
       }
     }
 
-    if (closestDelta === Infinity) {
+    if (closestKey === undefined) {
       throw new ProviderError(
         this.name,
         "malformed",
