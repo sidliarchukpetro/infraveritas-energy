@@ -57,3 +57,7 @@ contracts/lib/*/package-lock.json
 contracts/lib/*/yarn.lock
 edge-test-key.pem
 edge-test-key.pem
+
+# Aggregator build artifacts
+aggregator/dist/
+contracts/lcov.info
