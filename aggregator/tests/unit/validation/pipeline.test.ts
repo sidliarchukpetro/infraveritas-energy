@@ -14,7 +14,6 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   ValidationPipeline,
-  type ProcessOptions,
 } from "../../../src/validation/pipeline.js";
 import type { CanonicalPayload, Reading } from "../../../src/verify/canonical.js";
 import type {
@@ -23,7 +22,6 @@ import type {
 } from "../../../src/validation/weather/ensemble.js";
 import type { StatisticsModule, DriftSummary } from "../../../src/validation/statistics.js";
 import type { SubmissionPersistence } from "../../../src/validation/persistence.js";
-import type { AnomalyResult } from "../../../src/validation/anomaly.js";
 
 // ---------- Factory: minimal valid CanonicalPayload ----------
 
@@ -49,10 +47,15 @@ function makePayload(overrides: Partial<CanonicalPayload> = {}): CanonicalPayloa
     light_level: 50000n,
     tamper_flag: 0n,
     readings: makeReadings(),
-    total_energy_mwh: 50000n,
     ...overrides,
   };
 }
+
+/**
+ * Test default для totalEnergyMwh — passed як explicit param у process().
+ * В production цей value обчислюється worker-ом з readings і передається.
+ */
+const DEFAULT_TOTAL_ENERGY_MWH = 50000n;
 
 // ---------- Mock factories ----------
 
@@ -115,7 +118,7 @@ describe("ValidationPipeline.process — orchestration", () => {
       mocks.persistence,
     );
 
-    const outcome = await pipeline.process(makePayload());
+    const outcome = await pipeline.process(makePayload(), DEFAULT_TOTAL_ENERGY_MWH);
 
     expect(mocks.ensembleFetch).toHaveBeenCalledTimes(1);
     expect(mocks.zscoreFn).toHaveBeenCalledTimes(1);
@@ -138,6 +141,7 @@ describe("ValidationPipeline.process — orchestration", () => {
 
     await pipeline.process(
       makePayload({ lat_e7: 484517000n, lon_e7: 255752000n }),
+      DEFAULT_TOTAL_ENERGY_MWH,
     );
 
     // EnsembleProvider.fetch(lat, lng, ts)
@@ -149,7 +153,7 @@ describe("ValidationPipeline.process — orchestration", () => {
     expect(ts).toBe(1700000000);
   });
 
-  it("passes device_id і total_energy_mwh до StatisticsModule", async () => {
+  it("passes device_id і totalEnergyMwh до StatisticsModule", async () => {
     const mocks = makeMocks();
     const pipeline = new ValidationPipeline(
       mocks.ensemble,
@@ -158,7 +162,8 @@ describe("ValidationPipeline.process — orchestration", () => {
     );
 
     await pipeline.process(
-      makePayload({ device_id: 99999n, total_energy_mwh: 12345n }),
+      makePayload({ device_id: 99999n }),
+      12345n,
     );
 
     const zscoreCall = mocks.zscoreFn.mock.calls[0];
@@ -185,10 +190,9 @@ describe("ValidationPipeline.process — orchestration", () => {
       lat_e7: 484517000n,
       lon_e7: 255752000n,
       epoch_start_ts: 1700000000n,
-      total_energy_mwh: 88888n,
     });
 
-    await pipeline.process(payload);
+    await pipeline.process(payload, 88888n);
 
     const persistCall = mocks.persistFn.mock.calls[0];
     expect(persistCall).toBeDefined();
@@ -221,7 +225,10 @@ describe("ValidationPipeline.process — chain references", () => {
     const sessionKey = new Uint8Array(32).fill(0x42);
     const txHash = new Uint8Array(32).fill(0xab);
 
-    await pipeline.process(makePayload(), { sessionKey, txHash });
+    await pipeline.process(makePayload(), DEFAULT_TOTAL_ENERGY_MWH, {
+      sessionKey,
+      txHash,
+    });
 
     const persistInput = mocks.persistFn.mock.calls[0]![0];
     expect(persistInput.sessionKey).toBe(sessionKey);
@@ -236,7 +243,7 @@ describe("ValidationPipeline.process — chain references", () => {
       mocks.persistence,
     );
 
-    await pipeline.process(makePayload());
+    await pipeline.process(makePayload(), DEFAULT_TOTAL_ENERGY_MWH);
 
     const persistInput = mocks.persistFn.mock.calls[0]![0];
     expect(persistInput.sessionKey).toBeUndefined();
@@ -252,7 +259,9 @@ describe("ValidationPipeline.process — chain references", () => {
     );
 
     const sessionKey = new Uint8Array(32).fill(0x33);
-    await pipeline.process(makePayload(), { sessionKey });
+    await pipeline.process(makePayload(), DEFAULT_TOTAL_ENERGY_MWH, {
+      sessionKey,
+    });
 
     const persistInput = mocks.persistFn.mock.calls[0]![0];
     expect(persistInput.sessionKey).toBe(sessionKey);
@@ -273,6 +282,7 @@ describe("ValidationPipeline.process — anomaly flags propagation", () => {
 
     const outcome = await pipeline.process(
       makePayload({ tamper_flag: 1n }),
+      DEFAULT_TOTAL_ENERGY_MWH,
     );
 
     expect(outcome.anomaly.flags).toContain("tamper_flag_set");
@@ -289,9 +299,8 @@ describe("ValidationPipeline.process — anomaly flags propagation", () => {
       mocks.persistence,
     );
 
-    const outcome = await pipeline.process(
-      makePayload({ total_energy_mwh: 5000n }),
-    );
+    // 5000n > NIGHT_ENERGY_THRESHOLD (100n) у anomaly evaluator
+    const outcome = await pipeline.process(makePayload(), 5000n);
 
     expect(outcome.anomaly.flags).toContain("energy_inconsistent_with_weather");
   });
@@ -304,7 +313,7 @@ describe("ValidationPipeline.process — anomaly flags propagation", () => {
       mocks.persistence,
     );
 
-    const outcome = await pipeline.process(makePayload());
+    const outcome = await pipeline.process(makePayload(), DEFAULT_TOTAL_ENERGY_MWH);
 
     expect(outcome.anomaly.flags).toContain("energy_zscore_high");
   });
@@ -319,7 +328,7 @@ describe("ValidationPipeline.process — anomaly flags propagation", () => {
       mocks.persistence,
     );
 
-    const outcome = await pipeline.process(makePayload());
+    const outcome = await pipeline.process(makePayload(), DEFAULT_TOTAL_ENERGY_MWH);
 
     expect(outcome.anomaly.flags).toContain("drift_detected");
   });
@@ -338,7 +347,7 @@ describe("ValidationPipeline.process — anomaly flags propagation", () => {
       mocks.persistence,
     );
 
-    const outcome = await pipeline.process(makePayload());
+    const outcome = await pipeline.process(makePayload(), DEFAULT_TOTAL_ENERGY_MWH);
 
     expect(outcome.anomaly.flags).toContain("weather_unavailable");
   });
@@ -357,9 +366,9 @@ describe("ValidationPipeline.process — error propagation", () => {
       mocks.persistence,
     );
 
-    await expect(pipeline.process(makePayload())).rejects.toThrow(
-      /connection refused/,
-    );
+    await expect(
+      pipeline.process(makePayload(), DEFAULT_TOTAL_ENERGY_MWH),
+    ).rejects.toThrow(/connection refused/);
     expect(mocks.persistFn).not.toHaveBeenCalled();
   });
 
@@ -373,9 +382,9 @@ describe("ValidationPipeline.process — error propagation", () => {
       mocks.persistence,
     );
 
-    await expect(pipeline.process(makePayload())).rejects.toThrow(
-      /constraint violation/,
-    );
+    await expect(
+      pipeline.process(makePayload(), DEFAULT_TOTAL_ENERGY_MWH),
+    ).rejects.toThrow(/constraint violation/);
   });
 });
 
@@ -418,11 +427,11 @@ describe("ValidationPipeline.process — parallel execution", () => {
     const pipeline = new ValidationPipeline(ensemble, statistics, persistence);
 
     const start = Date.now();
-    await pipeline.process(makePayload());
+    await pipeline.process(makePayload(), DEFAULT_TOTAL_ENERGY_MWH);
     const elapsed = Date.now() - start;
 
     // Parallel — close to delayMs, not 3*delayMs.
-    // Дозволяємо ~200ms upper bound для slow CI.
+    // Дозволяємо ~250ms upper bound для slow CI.
     expect(elapsed).toBeLessThan(delayMs * 2.5);
   });
 });

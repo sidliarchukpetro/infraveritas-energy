@@ -78,11 +78,18 @@ export class ValidationPipeline {
    * Returns combined outcome — for caller to log / forward into API response.
    * Persistence уже виконана при return — sync з DB guaranteed.
    *
+   * @param payload — canonical payload зі signed readings
+   * @param totalEnergyMwh — computed total energy (z public inputs до ZK circuit).
+   *                        Worker уже обчислює це для chain submit; passes тут
+   *                        замість дублювати computation у pipeline.
+   * @param options — chain references якщо вже доступні
+   *
    * @throws if DB query fails (statistics OR persistence)
    *         — ensemble не кидає, повертає status='unavailable' замість того.
    */
   async process(
     payload: CanonicalPayload,
+    totalEnergyMwh: bigint,
     options: ProcessOptions = {},
   ): Promise<ValidationOutcome> {
     // Decode spatial coords для weather query
@@ -96,7 +103,7 @@ export class ValidationPipeline {
       this.ensembleProvider.fetch(lat, lng, ts),
       this.statistics.computeEnergyZScore(
         payload.device_id,
-        payload.total_energy_mwh,
+        totalEnergyMwh,
       ),
       this.statistics.detectDrift(payload.device_id),
     ]);
@@ -105,7 +112,7 @@ export class ValidationPipeline {
     const anomaly = evaluateAnomaly(
       {
         tamper_flag: payload.tamper_flag,
-        total_energy_mwh: payload.total_energy_mwh,
+        total_energy_mwh: totalEnergyMwh,
       },
       ensemble,
       zscore,
@@ -120,7 +127,7 @@ export class ValidationPipeline {
       latE7: payload.lat_e7,
       lonE7: payload.lon_e7,
       epochStartTs: payload.epoch_start_ts,
-      totalEnergyMwh: payload.total_energy_mwh,
+      totalEnergyMwh: totalEnergyMwh,
       ensemble,
       energyZscore: zscore,
       anomaly,
