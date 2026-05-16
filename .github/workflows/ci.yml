@@ -15,7 +15,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: stable
       - name: Show versions
         run: forge --version
       - name: Forge build
@@ -38,7 +38,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: stable
       - name: Install Slither
         run: pip install slither-analyzer==0.11.5
       - name: Forge build for Slither
