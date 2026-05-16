@@ -63,8 +63,13 @@ def load_or_create_signer(
     return P256Signer(private_key=private_key), True
 
 
-def make_payload(session_id: int) -> CanonicalPayload:
-    """Test payload: 100 readings ~5.5V × ~240mA (sensible energy)."""
+def make_payload(session_id: int, epoch_start_ts: int) -> CanonicalPayload:
+    """Test payload: 100 readings ~5.5V × ~240mA (sensible energy).
+
+    Caller passes both session_id and epoch_start_ts explicitly. Hard-coded
+    epoch caused repeated runs to revert with InvalidTimestamp once a previous
+    submission set lastSubmissionTimestamp on V3 (strict monotonic gap check).
+    """
     readings = tuple(
         Reading(
             voltage_mv=5500 + i,
@@ -76,7 +81,7 @@ def make_payload(session_id: int) -> CanonicalPayload:
     return CanonicalPayload(
         device_id=42,
         session_id=session_id,
-        epoch_start_ts=int(time.time()),
+        epoch_start_ts=epoch_start_ts,
         lat_e7=484_517_000,   # ~48.45° N (Sniatyn)
         lon_e7=255_752_000,   # ~25.57° E
         light_level=5000,
@@ -100,11 +105,23 @@ def main() -> int:
         help="force regenerate key even if file exists",
     )
     parser.add_argument("--session-id", type=int, default=None)
+    parser.add_argument(
+        "--epoch-start-ts",
+        type=int,
+        default=None,
+        help=(
+            "epoch_start_ts to embed in payload (unix seconds). "
+            "Default: current time. V3 enforces strict-monotonic gap "
+            "check, so a hard-coded value reverts InvalidTimestamp on "
+            "repeated runs once lastSubmissionTimestamp is set."
+        ),
+    )
     parser.add_argument("--poll-interval-s", type=float, default=5.0)
     parser.add_argument("--max-poll-s", type=float, default=300.0)
     args = parser.parse_args()
 
     session_id = args.session_id or int(time.time())
+    epoch_start_ts = args.epoch_start_ts or int(time.time())
 
     # 1. Load or create edge keypair
     signer, is_new = load_or_create_signer(args.key_file, force_new=args.new_key)
@@ -119,7 +136,7 @@ def main() -> int:
     print()
 
     # 2. Payload
-    payload = make_payload(session_id=session_id)
+    payload = make_payload(session_id=session_id, epoch_start_ts=epoch_start_ts)
     total_energy = sum(r.voltage_mv * r.current_ma for r in payload.readings)
     print("=== Payload ===")
     print(f"  device_id:       {payload.device_id}")
