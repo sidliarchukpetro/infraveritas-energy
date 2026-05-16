@@ -1,5 +1,5 @@
 /**
- * UltraHonk proof generation and local verification via @aztec/bb.js v4.2.1.
+ * UltraHonk proof generation and local verification via @aztec/bb.js v5.0.0-nightly.20260324.
  *
  * Spec: docs/specs/aggregator_design.md §3.3.
  *
