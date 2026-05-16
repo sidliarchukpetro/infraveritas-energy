@@ -38,8 +38,8 @@ fn main(
     assert(computed_hash == payload_hash);
 
     // Check 2 of 7: metadata destructuring.
-    // Public inputs must match positions 0,1,2,6 of canonical_payload.
-    // Positions 3,4 (lat_e7, lon_e7) and 5 (light_level) remain private.
+    // Public inputs must match positions 0..6 of canonical_payload.
+    // All 7 metadata fields are public (declared as `pub Field` above).
     // Spec: edge/hal/canonical.py canonicalize() field order.
     assert(canonical_payload[0] == device_id);
     assert(canonical_payload[1] == session_id);
