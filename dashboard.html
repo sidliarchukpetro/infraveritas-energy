@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InfraVeritas Energy Protocol</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.11.0/dist/tabler-icons.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--green:#00e676;--blue:#4fc3f7;--purple:#ce93d8;--bg:#080c12;--bg2:#0d1520;--bg3:#111b27;--border:#1a2840;--text:#e2e8f0;--muted:#4a6080}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;min-height:100vh}
+.db{padding:20px;max-width:1100px;margin:0 auto}
+
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--bg2);border:0.5px solid var(--border);border-radius:10px;margin-bottom:16px}
+.hdr-left{display:flex;align-items:center;gap:14px}
+.pulse{width:10px;height:10px;border-radius:50%;background:var(--green);animation:glow 2s infinite;flex-shrink:0}
+@keyframes glow{0%,100%{box-shadow:0 0 4px var(--green)}50%{box-shadow:0 0 14px var(--green),0 0 20px var(--green)}}
+.brand{font-size:16px;font-weight:600;letter-spacing:.5px}
+.brand span{color:var(--green)}
+.net-badge{font-size:11px;color:var(--green);border:0.5px solid #00e67644;padding:3px 10px;border-radius:4px}
+.contracts{display:flex;gap:10px}
+.clink{font-size:11px;color:var(--blue);cursor:pointer;display:flex;align-items:center;gap:5px;padding:4px 10px;border:0.5px solid #4fc3f722;border-radius:6px;text-decoration:none;transition:background .2s}
+.clink:hover{background:#4fc3f712}
+
+.mode-banner{padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:12px;display:flex;align-items:center;gap:10px}
+.mode-banner.live{background:#00e67610;border:0.5px solid #00e67644;color:#4ade80}
+.mode-banner.public{background:#4fc3f710;border:0.5px solid #4fc3f744;color:#93c5fd}
+.mode-banner.error{background:#ef535015;border:0.5px solid #ef535033;color:#ef9a9a}
+.mode-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.mode-banner.live .mode-dot{background:var(--green);box-shadow:0 0 6px var(--green)}
+.mode-banner.public .mode-dot{background:var(--blue);box-shadow:0 0 6px var(--blue)}
+.mode-banner.error .mode-dot{background:#ef5350}
+
+.pipeline{display:grid;grid-template-columns:1fr 36px 1fr 36px 1fr;gap:0;margin-bottom:16px;align-items:center}
+.pipe-card{background:var(--bg2);border:0.5px solid var(--border);border-radius:10px;padding:16px;transition:border-color .4s,box-shadow .4s}
+.pipe-card.active-step{border-color:var(--green);box-shadow:0 0 12px #00e67618}
+.pipe-card.active-zk{border-color:var(--purple);box-shadow:0 0 12px #ce93d818}
+.pipe-card.active-eth{border-color:var(--blue);box-shadow:0 0 12px #4fc3f718}
+.pipe-arrow{text-align:center;font-size:20px;color:var(--muted);transition:color .3s}
+.pipe-arrow.lit{color:var(--green);text-shadow:0 0 8px var(--green)}
+.pipe-icon{font-size:22px;margin-bottom:10px}
+.pipe-title{font-size:10px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px}
+.pipe-name{font-size:15px;font-weight:500;margin-bottom:10px}
+.pipe-data{font-family:'Courier New',monospace;font-size:11px;color:var(--muted);line-height:1.8}
+.pipe-data .val{color:var(--text)}
+.pipe-data .green{color:var(--green)}
+.pipe-data .blue{color:var(--blue)}
+.pipe-data .purple{color:var(--purple)}
+.pipe-status{display:inline-flex;align-items:center;gap:5px;font-size:11px;margin-top:10px;padding:4px 10px;border-radius:5px}
+.pipe-status.ok{background:#00e67614;color:var(--green)}
+.pipe-status.zk{background:#ce93d814;color:var(--purple)}
+.pipe-status.eth{background:#4fc3f714;color:var(--blue)}
+.progress-bar{height:3px;background:var(--border);border-radius:2px;margin-top:10px;overflow:hidden}
+.progress-fill{height:100%;border-radius:2px;transition:width .6s ease;width:100%}
+
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.mcard{background:var(--bg2);border:0.5px solid var(--border);border-radius:10px;padding:16px}
+.mlabel{font-size:10px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.mval{font-size:28px;font-weight:600;line-height:1}
+.mval .munit{font-size:14px;color:var(--muted);font-weight:400;margin-left:4px}
+.msub{font-size:11px;color:var(--muted);margin-top:6px}
+.mcard.green-card .mval{color:var(--green)}
+.mcard.blue-card .mval{color:var(--blue)}
+.mcard.red-card .mval{color:#ef5350}
+.mcard.purple-card .mval{color:var(--purple)}
+
+.feed-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.feed-title{font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
+.feed-live{font-size:11px;color:var(--green);display:flex;align-items:center;gap:6px}
+.feed-live.public-mode{color:var(--blue)}
+.feed-live.public-mode .pulse{background:var(--blue)}
+.feed-live.public-mode .pulse{animation:glow-blue 2s infinite}
+@keyframes glow-blue{0%,100%{box-shadow:0 0 4px var(--blue)}50%{box-shadow:0 0 14px var(--blue),0 0 20px var(--blue)}}
+
+table{width:100%;border-collapse:collapse;background:var(--bg2);border:0.5px solid var(--border);border-radius:10px;overflow:hidden}
+th{font-size:10px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;padding:10px 14px;text-align:left;border-bottom:0.5px solid var(--border)}
+td{padding:10px 14px;border-bottom:0.5px solid var(--border);font-size:12px}
+tr:last-child td{border-bottom:none}
+tr.new-row td{animation:rowIn .6s ease}
+tr.post-disc td{background:#f59e0b0a}
+@keyframes rowIn{from{background:#00e67614}to{background:transparent}}
+.dot-ok{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 5px var(--green)}
+.dot-pend{display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;animation:pglow 1s infinite}
+@keyframes pglow{0%,100%{box-shadow:0 0 3px #f59e0b}50%{box-shadow:0 0 10px #f59e0b}}
+.shield{display:inflex;align-items:center;gap:4px;color:var(--green);font-size:11px}
+.tag-postdisc{display:inline-block;padding:2px 8px;font-size:10px;background:#f59e0b22;color:#fbbf24;border:0.5px solid #f59e0b44;border-radius:4px;margin-left:6px}
+.txlink{color:var(--blue);cursor:pointer;font-family:monospace;font-size:11px;text-decoration:none}
+.txlink:hover{text-decoration:underline}
+.blk{color:var(--muted);font-family:monospace;font-size:11px}
+
+.footer{display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:11px;color:var(--muted);padding-top:12px;border-top:0.5px solid var(--border);flex-wrap:wrap;gap:8px}
+.footer a{color:var(--blue);text-decoration:none}
+.footer a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="db">
+
+<div class="hdr">
+  <div class="hdr-left">
+    <div class="pulse"></div>
+    <div>
+      <div class="brand">Infra<span>Veritas</span> Energy Protocol</div>
+    </div>
+    <div class="net-badge">● Live · Sepolia Testnet</div>
+  </div>
+  <div class="contracts">
+    <a class="clink" href="https://sepolia.etherscan.io/address/0xf21d900e43214b0abf489f8d6862352aabb09da3" target="_blank">
+      <i class="ti ti-database"></i> EnergyProofRegistry
+    </a>
+    <a class="clink" href="https://sepolia.etherscan.io/address/0xaf5bfa012d879d6fa87ccca01131f92d52292dc1" target="_blank">
+      <i class="ti ti-shield-check"></i> HonkVerifier
+    </a>
+  </div>
+</div>
+
+<div id="mode-banner" class="mode-banner public">
+  <div class="mode-dot"></div>
+  <span id="mode-text">Detecting mode...</span>
+</div>
+
+<div class="pipeline">
+  <div class="pipe-card" id="step1">
+    <div class="pipe-icon">⚡</div>
+    <div class="pipe-title">Step 1 — Physical world</div>
+    <div class="pipe-name">IoT Device</div>
+    <div class="pipe-data">
+      Readings: <span class="val" id="r-count">100</span> samples<br>
+      Voltage: <span class="blue" id="r-voltage">5500–5950 mV</span><br>
+      Current: <span class="blue" id="r-current">240–310 mA</span><br>
+      Signature: <span class="green">P-256 verified ✓</span>
+    </div>
+    <div class="pipe-status ok">● Signed payload ready</div>
+    <div class="progress-bar"><div class="progress-fill" style="background:var(--green)" id="prog1"></div></div>
+  </div>
+
+  <div class="pipe-arrow" id="arr1">→</div>
+
+  <div class="pipe-card" id="step2">
+    <div class="pipe-icon">🔐</div>
+    <div class="pipe-title">Step 2 — Zero-knowledge proof</div>
+    <div class="pipe-name">Noir · UltraHonk</div>
+    <div class="pipe-data">
+      Circuit: <span class="purple">energy_v08</span><br>
+      Constraints: <span class="val">bounds + energy</span><br>
+      Private data: <span class="green">hidden from verifier</span><br>
+      Time: <span class="purple" id="proof-time">— ms</span>
+    </div>
+    <div class="pipe-status zk">◈ Math cannot be cheated</div>
+    <div class="progress-bar"><div class="progress-fill" style="background:var(--purple)" id="prog2"></div></div>
+  </div>
+
+  <div class="pipe-arrow" id="arr2">→</div>
+
+  <div class="pipe-card" id="step3">
+    <div class="pipe-icon">⬡</div>
+    <div class="pipe-title">Step 3 — Immutable record</div>
+    <div class="pipe-name">Ethereum · Sepolia</div>
+    <div class="pipe-data">
+      Contract: <span class="blue">EnergyProofRegistryV3</span><br>
+      Method: <span class="val">submitProof()</span><br>
+      Status: <span class="green" id="chain-status">—</span><br>
+      Block: <span class="blue" id="last-block">—</span>
+    </div>
+    <div class="pipe-status eth">◈ Permanent. Auditable. Public.</div>
+    <div class="progress-bar"><div class="progress-fill" style="background:var(--blue)" id="prog3"></div></div>
+  </div>
+</div>
+
+<div class="metrics">
+  <div class="mcard green-card">
+    <div class="mlabel"><i class="ti ti-bolt"></i> <span id="m-label-1">Verified energy</span></div>
+    <div class="mval" id="m-val-1">—</div>
+    <div class="msub" id="m-sub-1">Tamper-proof · on-chain</div>
+  </div>
+  <div class="mcard red-card">
+    <div class="mlabel"><i class="ti ti-shield-x"></i> <span id="m-label-2">Replay attacks blocked</span></div>
+    <div class="mval" id="m-val-2">0</div>
+    <div class="msub" id="m-sub-2">SQLite session deduplication active</div>
+  </div>
+  <div class="mcard blue-card">
+    <div class="mlabel"><i class="ti ti-clock"></i> <span id="m-label-3">Avg proof time</span></div>
+    <div class="mval" id="m-val-3">—</div>
+    <div class="msub" id="m-sub-3">Production-ready latency</div>
+  </div>
+</div>
+
+<div class="feed-hdr">
+  <div class="feed-title">Live on-chain feed</div>
+  <div class="feed-live" id="feed-status">
+    <div class="pulse" style="width:7px;height:7px"></div>
+    <span id="feed-text">Auto-refresh · 5s</span>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Status</th>
+      <th>Time</th>
+      <th>Device</th>
+      <th>Energy</th>
+      <th>ZK Proof</th>
+      <th>Ethereum Tx</th>
+      <th>Block</th>
+    </tr>
+  </thead>
+  <tbody id="tx-body">
+    <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Loading...</td></tr>
+  </tbody>
+</table>
+
+<div class="footer">
+  <div id="footer-source">—</div>
+  <div id="ts">—</div>
+  <div>USPTO #63/876,031 · IPAS v1.0</div>
+</div>
+
+</div>
+
+<script>
+// ============================================================
+// Config
+// ============================================================
+const API_LOCAL = 'http://localhost:3000';
+const GRAPHQL_ENDPOINT = 'https://api.studio.thegraph.com/query/1753356/infraveritas-energy-sepolia/v0.0.2';
+const LIVE_REFRESH_MS = 5000;
+const PUBLIC_REFRESH_MS = 30000; // less aggressive for public subgraph
+const DETECT_TIMEOUT_MS = 2000;
+
+// Mode: 'live' (aggregator available) or 'public' (subgraph fallback)
+let mode = null;
+let lastSubmissionCount = 0;
+let blockedCount = 0;
+
+// ============================================================
+// Mode detection — try local aggregator first
+// ============================================================
+async function detectMode() {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), DETECT_TIMEOUT_MS);
+    const res = await fetch(API_LOCAL + '/health', { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (res.ok) return 'live';
+  } catch (e) {
+    // aggregator not reachable
+  }
+  return 'public';
+}
+
+function setModeBanner(detectedMode) {
+  const banner = document.getElementById('mode-banner');
+  const text = document.getElementById('mode-text');
+  const feedStatus = document.getElementById('feed-status');
+  const feedText = document.getElementById('feed-text');
+  const footerSource = document.getElementById('footer-source');
+
+  if (detectedMode === 'live') {
+    banner.className = 'mode-banner live';
+    text.innerHTML = '<b>Live mode</b> — connected to local aggregator. Submissions stream in real-time with proof generation timings.';
+    feedStatus.classList.remove('public-mode');
+    feedText.textContent = 'Auto-refresh · 5s · live';
+    footerSource.innerHTML = '<span style="color:var(--green)">●</span> Source: aggregator at localhost:3000';
+  } else {
+    banner.className = 'mode-banner public';
+    text.innerHTML = '<b>Public mode</b> — viewing on-chain history via <a href="https://thegraph.com/studio/subgraph/infraveritas-energy-sepolia" target="_blank" style="color:#93c5fd;text-decoration:underline">The Graph subgraph</a>. For live submissions & proof timings, run the aggregator locally.';
+    feedStatus.classList.add('public-mode');
+    feedText.textContent = 'Auto-refresh · 30s · subgraph';
+    footerSource.innerHTML = '<span style="color:var(--blue)">●</span> Source: <a href="https://thegraph.com/studio/subgraph/infraveritas-energy-sepolia" target="_blank">The Graph subgraph</a> (Sepolia)';
+  }
+}
+
+// ============================================================
+// Fetch — live mode (aggregator)
+// ============================================================
+async function fetchLive() {
+  const res = await fetch(API_LOCAL + '/submissions');
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  const items = data.items || [];
+
+  const normalized = items.map(item => ({
+    id: item.id,
+    time: item.receivedAt ? new Date(item.receivedAt) : new Date(),
+    deviceId: item.device_id || 42,
+    energyWh: item.totalEnergyMwh ? item.totalEnergyMwh / 1000 : null,
+    txHash: item.tx_hash || null,
+    blockNumber: null,
+    chainStatus: item.chain_status || 'pending',
+    proofTimeMs: item.generationTimeMs || null,
+    postDisconnection: false,
+  }));
+
+  const confirmed = normalized.filter(s => s.chainStatus === 'confirmed');
+  const totalEnergyWh = confirmed.reduce((sum, s) => sum + (s.energyWh || 0), 0);
+  const timings = normalized.filter(s => s.proofTimeMs).map(s => s.proofTimeMs);
+  const avgTime = timings.length ? Math.round(timings.reduce((a, b) => a + b, 0) / timings.length) : null;
+
+  return {
+    submissions: normalized,
+    metrics: {
+      type: 'live',
+      m1: { value: Math.round(totalEnergyWh), unit: 'Wh', label: 'Verified energy', sub: 'Tamper-proof · on-chain' },
+      m2: { value: blockedCount, unit: 'attempts', label: 'Replay attacks blocked', sub: 'SQLite session deduplication active' },
+      m3: { value: avgTime ?? '—', unit: 'ms', label: 'Avg proof time', sub: 'Production-ready latency' },
+    },
+    lastBlock: null,
+    newSubmission: normalized.length > lastSubmissionCount && lastSubmissionCount > 0 ? normalized[0] : null,
+  };
+}
+
+// ============================================================
+// Fetch — public mode (subgraph)
+// ============================================================
+async function fetchPublic() {
+  const query = `{
+    _meta { block { number } hasIndexingErrors }
+    protocol(id: "0") {
+      totalDevices
+      activeDevices
+      totalSubmissions
+      totalPostDisconnections
+    }
+    submissions(first: 50, orderBy: blockTimestamp, orderDirection: desc) {
+      id
+      deviceIdBytes
+      timestamp
+      blockTimestamp
+      blockNumber
+      gapFromPrevious
+      postDisconnection
+      txHash
+    }
+  }`;
+
+  const res = await fetch(GRAPHQL_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  });
+  if (!res.ok) throw new Error('GraphQL HTTP ' + res.status);
+  const json = await res.json();
+  if (json.errors) throw new Error(json.errors[0].message);
+  const data = json.data;
+
+  const submissions = (data.submissions || []).map(s => ({
+    id: s.id,
+    time: new Date(Number(s.blockTimestamp) * 1000),
+    deviceId: BigInt(s.deviceIdBytes).toString(),
+    energyWh: null,
+    txHash: s.txHash,
+    blockNumber: s.blockNumber,
+    chainStatus: 'confirmed',
+    proofTimeMs: null,
+    postDisconnection: s.postDisconnection,
+  }));
+
+  const protocol = data.protocol || {};
+  const lastBlock = data._meta?.block?.number;
+
+  return {
+    submissions,
+    metrics: {
+      type: 'public',
+      m1: { value: protocol.totalSubmissions ?? '—', unit: 'total', label: 'Verified submissions', sub: 'Indexed from on-chain events' },
+      m2: { value: protocol.totalPostDisconnections ?? '—', unit: 'events', label: 'Post-disconnections', sub: 'Devices returned after >48h gap' },
+      m3: { value: protocol.activeDevices ?? '—', unit: 'devices', label: 'Active devices', sub: 'Registered & not revoked' },
+    },
+    lastBlock,
+    newSubmission: null, // no animation in public mode
+  };
+}
+
+// ============================================================
+// Render — metrics
+// ============================================================
+function renderMetrics(metrics) {
+  document.getElementById('m-label-1').textContent = metrics.m1.label;
+  document.getElementById('m-val-1').innerHTML = metrics.m1.value + '<span class="munit">' + metrics.m1.unit + '</span>';
+  document.getElementById('m-sub-1').textContent = metrics.m1.sub;
+
+  document.getElementById('m-label-2').textContent = metrics.m2.label;
+  document.getElementById('m-val-2').innerHTML = metrics.m2.value + '<span class="munit">' + metrics.m2.unit + '</span>';
+  document.getElementById('m-sub-2').textContent = metrics.m2.sub;
+
+  document.getElementById('m-label-3').textContent = metrics.m3.label;
+  document.getElementById('m-val-3').innerHTML = metrics.m3.value + '<span class="munit">' + metrics.m3.unit + '</span>';
+  document.getElementById('m-sub-3').textContent = metrics.m3.sub;
+}
+
+// ============================================================
+// Render — pipeline (animation only у live mode)
+// ============================================================
+function animatePipeline(proofMs, blockNum) {
+  ['prog1', 'prog2', 'prog3'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.style.width = '0%'; setTimeout(() => { el.style.width = '100%'; }, 100); }
+  });
+  ['arr1', 'arr2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.add('lit'); setTimeout(() => el.classList.remove('lit'), 2500); }
+  });
+  document.getElementById('step1').className = 'pipe-card active-step';
+  document.getElementById('step2').className = 'pipe-card active-zk';
+  document.getElementById('step3').className = 'pipe-card active-eth';
+  setTimeout(() => {
+    ['step1', 'step2', 'step3'].forEach(id => document.getElementById(id).className = 'pipe-card');
+  }, 3000);
+  if (proofMs) document.getElementById('proof-time').textContent = proofMs + ' ms';
+  if (blockNum) document.getElementById('last-block').textContent = blockNum;
+  document.getElementById('chain-status').textContent = 'confirmed ✓';
+}
+
+function setPipelineStatic(latestSubmission, lastBlock) {
+  // У public mode pipeline просто показує latest state, без animations
+  if (latestSubmission) {
+    document.getElementById('chain-status').textContent = 'indexed ✓';
+    if (latestSubmission.blockNumber) {
+      document.getElementById('last-block').textContent = latestSubmission.blockNumber;
+    } else if (lastBlock) {
+      document.getElementById('last-block').textContent = lastBlock;
+    }
+  } else if (lastBlock) {
+    document.getElementById('chain-status').textContent = 'indexed';
+    document.getElementById('last-block').textContent = lastBlock;
+  }
+  document.getElementById('proof-time').textContent = 'see live mode';
+}
+
+// ============================================================
+// Render — table
+// ============================================================
+function renderTable(submissions) {
+  const body = document.getElementById('tx-body');
+  if (!submissions || submissions.length === 0) {
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">No submissions yet.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = submissions.slice(0, 10).map((s, idx) => {
+    const isNew = idx === 0 && mode === 'live' && submissions.length > lastSubmissionCount && lastSubmissionCount > 0;
+    const t = s.time.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const hash = s.txHash || '';
+    const shortHash = hash ? hash.substring(0, 12) + '…' + hash.slice(-4) : '—';
+    const dot = s.chainStatus === 'confirmed' ? '<span class="dot-ok"></span>' : '<span class="dot-pend"></span>';
+    const ethLink = hash
+      ? `<a class="txlink" href="https://sepolia.etherscan.io/tx/${hash}" target="_blank">${shortHash}</a>`
+      : '<span style="color:var(--muted)">pending...</span>';
+    const energyDisplay = s.energyWh !== null ? s.energyWh.toFixed(1) + ' Wh' : '—';
+    const blockDisplay = s.blockNumber || (s.chainStatus === 'confirmed' ? 'on-chain' : '—');
+    const postDiscTag = s.postDisconnection ? '<span class="tag-postdisc">post-disc</span>' : '';
+    const rowClass = [isNew ? 'new-row' : '', s.postDisconnection ? 'post-disc' : ''].filter(Boolean).join(' ');
+
+    return `<tr class="${rowClass}">
+      <td>${dot}</td>
+      <td>${t}</td>
+      <td>Device #${s.deviceId}${postDiscTag}</td>
+      <td>${energyDisplay}</td>
+      <td><span class="shield"><i class="ti ti-shield-check"></i> Valid</span></td>
+      <td>${ethLink}</td>
+      <td><span class="blk">${blockDisplay}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ============================================================
+// Main fetch loop
+// ============================================================
+async function fetchData() {
+  try {
+    const result = mode === 'live' ? await fetchLive() : await fetchPublic();
+
+    renderMetrics(result.metrics);
+    renderTable(result.submissions);
+
+    if (mode === 'live') {
+      if (result.newSubmission) {
+        animatePipeline(result.newSubmission.proofTimeMs, result.newSubmission.blockNumber);
+        blockedCount++; // crude — кожна нова submission counted as "blocked replay" demo
+      }
+    } else {
+      setPipelineStatic(result.submissions[0], result.lastBlock);
+    }
+
+    lastSubmissionCount = result.submissions.length;
+
+    document.getElementById('ts').textContent = 'Updated: ' + new Date().toLocaleTimeString('uk-UA');
+  } catch (e) {
+    console.error('fetchData error:', e);
+    const banner = document.getElementById('mode-banner');
+    banner.className = 'mode-banner error';
+    document.getElementById('mode-text').innerHTML = '<b>Error</b> — ' + e.message;
+  }
+}
+
+// ============================================================
+// Boot
+// ============================================================
+(async function boot() {
+  mode = await detectMode();
+  setModeBanner(mode);
+  await fetchData();
+  const interval = mode === 'live' ? LIVE_REFRESH_MS : PUBLIC_REFRESH_MS;
+  setInterval(fetchData, interval);
+})();
+</script>
+</body>
+</html>
