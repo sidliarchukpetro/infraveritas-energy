@@ -15,14 +15,14 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: stable
       - name: Show versions
         run: forge --version
       - name: Forge build
-        run: forge build
+        run: forge build --skip "echidna/**"
         working-directory: contracts
       - name: Forge test
-        run: forge test -vvv
+        run: forge test -vvv --skip "echidna/**"
         working-directory: contracts
   slither:
     name: Slither static analysis
@@ -38,11 +38,11 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: stable
       - name: Install Slither
         run: pip install slither-analyzer==0.11.5
       - name: Forge build for Slither
-        run: forge build
+        run: forge build --skip "echidna/**"
         working-directory: contracts
       - name: Run Slither on new contracts (V3 + DeviceRegistry, blocking)
         run: slither . --config-file slither.config.json
