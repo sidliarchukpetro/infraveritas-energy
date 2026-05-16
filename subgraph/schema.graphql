@@ -1,8 +1,18 @@
-# InfraVeritas Energy subgraph schema
+# InfraVeritas Energy subgraph schema (v0.0.2)
 # Spec: docs/specs/phase5_design.md §3
+#
+# Design note (v0.0.2):
+#   V3.ProofSubmitted емітіть `deviceIdBytes32` = bytes32 cast of payload's
+#   uint64 device_id field — це semantic user-facing ID, не cryptographic
+#   pubKeyHash з DeviceRegistry. Тому Submission і Device — НЕЗАЛЕЖНІ
+#   сутності у цій схемі. Vони не linkable через event payloads.
+#
+#   Якщо у майбутньому потрібен зв'язок — або V3 має емітити pubKeyHash як
+#   додатковий topic, або aggregator зберігає mapping deviceId→pubKeyHash
+#   окремо.
 
 # -----------------------------------------------------------
-# Device — one registered IoT energy device
+# Device — один registered IoT пристрій (з DeviceRegistry)
 # -----------------------------------------------------------
 type Device @entity(immutable: false) {
   "Identifier: pubKeyHash (keccak256 of P-256 pubkey), as hex string with 0x prefix"
@@ -31,15 +41,6 @@ type Device @entity(immutable: false) {
 
   "Block timestamp of last suspension (null if never suspended)"
   suspendedAt: BigInt
-
-  "Number of proof submissions accepted on-chain"
-  submissionCount: Int!
-
-  "Number of submissions flagged with postDisconnection (returned after gap > 48h)"
-  postDisconnectionCount: Int!
-
-  "All submissions from this device, derived from Submission.device"
-  submissions: [Submission!]! @derivedFrom(field: "device")
 }
 
 enum DeviceStatus {
@@ -49,14 +50,14 @@ enum DeviceStatus {
 }
 
 # -----------------------------------------------------------
-# Submission — one proof submission accepted by V3
+# Submission — один proof submission accepted by V3
 # -----------------------------------------------------------
 type Submission @entity(immutable: true) {
   "Identifier: sessionKey from event (already unique per V3's replay protection)"
   id: ID!
 
-  "Device that submitted this proof"
-  device: Device!
+  "Raw deviceIdBytes32 from ProofSubmitted event — bytes32 cast of payload uint64 device_id."
+  deviceIdBytes: Bytes!
 
   "Timestamp parameter from event (uint64, payload's epoch_start_ts)"
   timestamp: BigInt!
@@ -78,19 +79,20 @@ type Submission @entity(immutable: true) {
 }
 
 # -----------------------------------------------------------
-# DailyStat — per-device aggregate for one UTC day
+# DailyStat — per-device-id aggregate for one UTC day
+# Keyed by raw deviceIdBytes (event payload), not Device entity.
 # -----------------------------------------------------------
 type DailyStat @entity(immutable: false) {
-  "Identifier: dayStartTs-pubKeyHash (dayStartTs is unix seconds of day start)"
+  "Identifier: dayStartTs-deviceIdBytesHex"
   id: ID!
 
   "Unix timestamp of day start (UTC midnight)"
   dayStartTs: BigInt!
 
-  "Device this stat is for"
-  device: Device!
+  "Raw deviceIdBytes from event (see Submission.deviceIdBytes note)"
+  deviceIdBytes: Bytes!
 
-  "Submissions on this day for this device"
+  "Submissions on this day for this device-id"
   submissionCount: Int!
 
   "Post-disconnection submissions on this day"
@@ -119,6 +121,6 @@ type Protocol @entity(immutable: false) {
   "All proof submissions ever indexed"
   totalSubmissions: Int!
 
-  "Submissions flagged with postDisconnection (across all devices)"
+  "Submissions flagged with postDisconnection (across all device-ids)"
   totalPostDisconnections: Int!
 }

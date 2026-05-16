@@ -7,8 +7,9 @@
  *   DeviceReactivated(bytes32 pubKeyHash, address operator)
  *   DeviceSuspended(bytes32 pubKeyHash, address operator)
  *
- * pubKeyHash — це id Device у subgraph. Той самий хеш V3 емітіть як `deviceId`
- * у ProofSubmitted, тому join працює.
+ * v0.0.2 change: Submission counters прибрані з Device (вони були concept-wrong
+ * через V3 емітинг deviceIdBytes32 != pubKeyHash). Тепер Device — pure lifecycle
+ * entity. Aggregate counts of submissions per deviceIdBytes — у DailyStat.
  */
 
 import { log } from "@graphprotocol/graph-ts";
@@ -31,8 +32,6 @@ const STATUS_SUSPENDED = "Suspended";
 export function handleDeviceRegistered(event: DeviceRegistered): void {
   let deviceId = event.params.pubKeyHash.toHexString();
 
-  // Захист від дублікату (повторна реєстрація після revoke не emit DeviceRegistered
-  // у V3 design — лише Reactivated. Тому повторного registered не очікуємо. Але defensive.)
   let existing = Device.load(deviceId);
   if (existing != null) {
     log.warning("DeviceRegistered повторно для {} — пропускаю create", [deviceId]);
@@ -45,8 +44,6 @@ export function handleDeviceRegistered(event: DeviceRegistered): void {
   device.registeredAt = event.params.registeredAt;
   device.registeredBy = event.params.operator;
   device.status = STATUS_ACTIVE;
-  device.submissionCount = 0;
-  device.postDisconnectionCount = 0;
   device.save();
 
   let protocol = loadOrCreateProtocol();
@@ -124,7 +121,6 @@ export function handleDeviceSuspended(event: DeviceSuspended): void {
   device.save();
 
   let protocol = loadOrCreateProtocol();
-  // Only Active → Suspended is valid у V3 design; інші переходи unexpected.
   if (prevStatus == STATUS_ACTIVE) {
     protocol.activeDevices = protocol.activeDevices - 1;
   }
