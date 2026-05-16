@@ -213,17 +213,22 @@ Worker integration. Це modify-existing-files drop, не нові файли.
 
 ---
 
-## 7. Сумарно
+## 7. Сумарно (станом на 2026-05-15 17:36 UTC)
 
-Phase 4 compute+DB layer закритий. Production wiring відкладений на Тараса (Postgres). Жоден з compute модулів не require integration test на реальній БД щоб бути правильним — структурне testing на mocks дає високу confidence. Реальна integration зробиться у week 4c-2 одним drop-ом коли Тарас підтвердить.
+Phase 4 architectural — **FULLY CLOSED**. Real Sepolia + Postgres end-to-end працює. Тарас підтвердив у власній environment, commit `4381da0`:
 
-3 critical learnings — записані у memory і future-proofing.
+- Pipeline: edge → aggregator → V3 (Sepolia) → 3 weather APIs → statistics → TimescaleDB hypertable
+- Validation default: enabled коли DB configured (через `POSTGRES_*` змінні або legacy `DATABASE_URL`), disabled inakshe
+- ~27 секунд end-to-end (proof gen 5s + chain submit 15s + validation persist 7s)
+- Один row у `device_readings_history` з ensemble_status, anomaly_flag, chain_submitted=true
+
+3+ critical learnings — записані у memory і future-proofing.
 
 ---
 
-## 8. Deployment recipe — post week 4c-2 smoke test (2026-05-15)
+## 8. Operational notes (production deployment)
 
-Зафіксовано після першого реального запуску Phase 4 pipeline на Windows + real Postgres (Тарас). Кожен пункт — реальна проблема, з якою зіткнулись, і її розв'язок.
+Зафіксовано після першого real-DB smoke test (Тарас, 2026-05-15). Кожен пункт — реальна проблема, виявлена при deployment, та її розв'язок.
 
 ### 8.1 Two ways to give aggregator DB credentials
 
@@ -241,31 +246,35 @@ POSTGRES_PORT=5432          # опційно, default 5432
 POSTGRES_DB=infraveritas_energy  # опційно, default infraveritas_energy
 ```
 
-Aggregator передає пароль як сирий рядок у `pg.Pool`, без парсингу URL — тому жодних обмежень на символи.
+Aggregator передає пароль як сирий рядок у `pg.Pool`, без парсингу URL — тому жодних обмежень на символи. Реалізація у `aggregator/src/main.ts::buildPoolConfig()` (commit що додав цю опцію).
 
 **Legacy — `DATABASE_URL`** (зворотна сумісність; пароль має бути URL-safe):
 ```
 DATABASE_URL=postgres://infraveritas:<URL-safe пароль>@127.0.0.1:5432/infraveritas_energy
 ```
 
-Якщо задані обидва варіанти, aggregator використовує **окремі змінні**. Логіка вибору у `aggregator/src/main.ts::buildPoolConfig()`.
+Якщо задані обидва варіанти, aggregator використовує **окремі змінні**.
 
 **Не** `postgres://postgres:postgres@...` — юзера `postgres` у нашій БД не існує, його `psql -U postgres` не пустить.
 
-### 8.2 Password MUST be URL-safe
+### 8.2 Password URL-safe requirement (тільки якщо використовуєш DATABASE_URL fallback)
 
-`POSTGRES_PASSWORD` парситься pg-драйвером як URI. Символи що ламають URL — `/`, `@`, `:`, `?`, `#`, `&`, `+` — **сирими у паролі не можна**.
+При використанні **окремих змінних** (§8.1 preferred path) — будь-які символи у паролі дозволені.
 
-Безпечні генератори:
+При використанні `DATABASE_URL` — пароль парситься pg-драйвером як URI. Символи що ламають URL — `/`, `@`, `:`, `?`, `#`, `&`, `+` — **сирими у паролі не можна**.
+
+Безпечні генератори (для DATABASE_URL шляху):
 - ✅ hex: `openssl rand -hex 32` → 64 chars, тільки `[0-9a-f]`
 - ✅ url-safe base64: `python -c 'import secrets, base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("="))'`
 - ❌ `openssl rand -base64 32` — генерує `+`, `/`, `=` (зустрічається `/` → ламає URL)
 
-**Симптом** коли password містить непідходящий символ:
+**Симптом** коли password містить непідходящий символ і використовується DATABASE_URL:
 - startup лог: `validation: "enabled"` (виглядає правильно)
 - при submission: `event: "validation-failed", err: "Invalid URL"`
 - hypertable: порожня (persistence не виконалась)
 - chain submission: пройшов (worker submit не залежить від DB)
+
+**Найпростіша рекомендація:** використовуй §8.1 preferred path — і проблема не виникне взагалі.
 
 ### 8.3 Working compose recipe (Windows)
 
@@ -281,6 +290,7 @@ docker compose --env-file .env \
 Ключове:
 - `--env-file .env` **обов'язковий** — без нього docker compose шукає `.env` поряд з першим `-f` файлом (у `aggregator/`), не у корені репо
 - `.env` має бути **без BOM** — Windows PowerShell `Set-Content -Encoding UTF8` додає BOM, який ламає парсинг першого рядка змінних. Писати через ASCII або `.NET WriteAllText` з UTF-8 без BOM
+- Окремий `-f infra/docker-compose.phase4.yml` **БЕЗ** base aggregator compose не працює (overlay потребує base)
 
 ### 8.4 Verification queries
 
@@ -299,3 +309,10 @@ docker exec infraveritas-postgres psql -U infraveritas -d infraveritas_energy \
 
 - `edge/scripts/sepolia_smoke.py` тепер приймає `--epoch-start-ts <unix_seconds>` (за замовчуванням — поточний час). Без цього після першого успішного E2E `lastSubmissionTimestamp` на V3 фіксує epoch, і наступні запуски з тим самим значенням revert-ять `InvalidTimestamp`.
 - Локальний `edge/edge-test-key.pem` на кожній машині генерує **окрему** пару P-256 ключів. Перед smoke-тестом перевір `isAuthorized` у DeviceRegistry для свого pubkey — якщо ні, зареєструй (script сам виведе готову `cast send` команду у разі `DeviceNotActive`).
+
+### 8.6 Weather APIs — degraded status is common
+
+`ensemble_status='degraded'` (тільки 1 з 3 providers responded) — нормальна поведінка на free tier. NASA POWER і PVGIS мають load обмеження для unauthenticated traffic. У production:
+
+- Якщо багато submissions з `degraded` — додати retry logic або зареєструватись для API keys
+- `unavailable` (всі 3 fail) — варто alert ops, але submission все одно проходить на chain
