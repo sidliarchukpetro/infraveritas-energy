@@ -14,10 +14,6 @@ dataSources:
     source:
       address: "0xf21d900e43214b0abf489f8d6862352aabb09da3"
       abi: EnergyProofRegistryV3
-      # TODO: replace 0 with V3 deploy block on Sepolia.
-      # Find via Etherscan: https://sepolia.etherscan.io/address/0xf21d900e43214b0abf489f8d6862352aabb09da3
-      # → "First transaction" → block number
-      # startBlock=0 works but takes hours to index all Sepolia history.
       startBlock: 10852229
     mapping:
       kind: ethereum/events
@@ -45,7 +41,6 @@ dataSources:
     source:
       address: "0x6249935e8f293cac2a7c4ce3717a14a8b1e83e03"
       abi: DeviceRegistry
-      # TODO: same as above — replace with DeviceRegistry deploy block.
       startBlock: 10851844
     mapping:
       kind: ethereum/events
