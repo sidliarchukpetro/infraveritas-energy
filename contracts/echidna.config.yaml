@@ -1,0 +1,31 @@
+# Echidna configuration for V3Properties harness
+#
+# Smoke run (debugging harness, ~30s): use --test-limit 10000 --seq-len 50
+# Full 24h run (Day 4 evening): --timeout 86400 --test-limit 0 --seq-len 100
+#
+# This file holds defaults; CLI flags override.
+
+testMode: property
+prefix: echidna_
+
+# Transaction generation
+seqLen: 100
+testLimit: 50000
+
+# Sender configuration — Echidna will randomly choose among these addresses
+# for each transaction. The harness contract is deployer (controls roles).
+deployer: "0x30000"
+sender: ["0x10000", "0x20000", "0x30000"]
+
+# Allow all contracts deployed by harness to be callable
+allContracts: false
+
+# Output verbosity
+format: text
+coverage: true
+corpusDir: "echidna-corpus"
+
+# Limits
+codeSize: 0x6000     # Allow large contracts (V3 with OZ inheritance is ~24KB)
+balanceAddr: 0xffffffff
+balanceContract: 0
