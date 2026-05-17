@@ -61,3 +61,6 @@ edge-test-key.pem
 # Aggregator build artifacts
 aggregator/dist/
 contracts/lcov.info
+contracts/echidna-corpus*/
+contracts/crytic-export/
+contracts/echidna-24h.log
