@@ -14,6 +14,13 @@ Physical asset verification protocol for energy generation. Edge devices read me
 | Aggregator | `aggregator/` | v1 legacy від V2, v2 redesign — після circuit v08 |
 | Documentation | `docs/specs/` | V3 design v0.3, Edge design v0.1, Sepolia checklist, handoff docs |
 
+## Live dashboard
+
+**Public observability:** [sidliarchukpetro.github.io/infraveritas-energy/dashboard.html](https://sidliarchukpetro.github.io/infraveritas-energy/dashboard.html)
+*(після увімкнення GitHub Pages у Settings — буде доступно)*
+
+Dashboard має dual-mode: розробник з aggregator на localhost бачить live proof timings, зовнішні спостерігачі — on-chain історію через [The Graph subgraph](https://thegraph.com/studio/subgraph/infraveritas-energy-sepolia) (Sepolia).
+
 ## Architecture
 
 ```
