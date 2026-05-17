@@ -1,0 +1,121 @@
+InfraVeritas Energy Protocol
+================================================================================
+Source-Available License (Interim)
+Copyright (c) 2025-2026 InfraVeritas Energy Team
+
+  Petro Sydliarchuk (Founder)
+  Oleksandr Sydliarchuk (CTO / Security Lead)
+  Taras Sydliarchuk (Operations / Firmware)
+
+All rights reserved.
+
+
+PATENT NOTICE
+================================================================================
+Aspects of this software and the associated InfraVeritas IPAS Standard
+are the subject of U.S. Provisional Patent Application No. 63/876,031,
+filed September 12, 2025. U.S. utility patent and international PCT
+applications are pending under the 12-month priority period (deadline:
+September 12, 2026).
+
+Practice of any method, system, or technique covered by claims of the
+above patent application, or any patent issuing therefrom, requires
+explicit written authorization from the patent holders, separate from
+this software license.
+
+
+LICENSE TERMS
+================================================================================
+This source code is made publicly available for the following permitted
+purposes only:
+
+  1. Transparency and public verification of the protocol's design,
+     security properties, and compliance posture.
+
+  2. Academic study, educational reference, and scholarly citation.
+
+  3. Independent security audit, peer review, and reproducible
+     pre-audit verification per the procedures documented in
+     docs/security/ of this repository.
+
+  4. Personal, non-commercial experimentation in a strictly local
+     test environment, with no public deployment.
+
+The following uses are EXPRESSLY NOT PERMITTED without prior written
+authorization from the InfraVeritas Energy Team:
+
+  - Commercial use of any kind, including but not limited to
+    operating a derivative protocol, providing services based on
+    this code, or incorporating this code into commercial products.
+
+  - Redistribution in source or binary form, in whole or in part,
+    whether modified or unmodified.
+
+  - Creation of derivative works intended for public deployment,
+    commercial use, or external distribution. Public forks on
+    GitHub or equivalent platforms intended for production
+    deployment are not permitted.
+
+  - Production deployment on any public blockchain, testnet
+    intended to serve real users, or off-chain infrastructure
+    serving production traffic.
+
+  - Practice of any method, system, or technique covered by
+    pending or issued patent claims referenced above.
+
+
+SCOPE
+================================================================================
+This license applies to original works contributed by the InfraVeritas
+Energy Team within this repository. Third-party dependencies retained
+in the repository, including but not limited to:
+
+  - OpenZeppelin Contracts (contracts/lib/openzeppelin-*)
+  - Foundry standard library (contracts/lib/forge-std/)
+  - Aztec-generated HonkVerifier (contracts/vendor/)
+  - Any other vendored third-party materials
+
+remain subject to their respective upstream licenses, which are
+preserved within those directories. Nothing in this license is
+intended to override or supersede those upstream license terms.
+
+The IPAS Verification Standard v1.0 specification document (separate
+PDF artifact available at https://infraveritas.pro/) is published
+under terms documented within that specification and may have
+different license conditions for the standard itself versus reference
+implementations of the standard.
+
+
+CONTACT
+================================================================================
+For licensing inquiries, integration partnerships, commercial
+arrangements, or any other matter requiring authorization beyond
+the permitted uses above:
+
+  Petro Sydliarchuk
+  Founder, InfraVeritas Energy Protocol
+  Website: https://infraveritas.pro/
+  GitHub: https://github.com/sidliarchukpetro/infraveritas-energy
+
+
+DISCLAIMER OF WARRANTY
+================================================================================
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+FUTURE LICENSING
+================================================================================
+This is an interim license pending finalization of long-term licensing
+strategy. The authors reserve the right to relicense this work under
+more permissive terms (such as Apache License 2.0, MIT License, or
+Business Source License) in the future, subject to patent strategy
+decisions and qualified IP counsel review.
+
+Any prior copies obtained under this license remain bound by these
+terms unless and until a successor license is published.
