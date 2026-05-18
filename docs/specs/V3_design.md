@@ -1,11 +1,38 @@
 # V3 Design — EnergyProofRegistryV3
 
-**Статус:** Draft v0.2
-**Дата:** 2026-05-12
+**Статус:** Draft v0.3
+**Дата:** 2026-05-17
 **Автор:** Petro Sydliarchuk
 **Reviewers:** Oleksandr (security review), Taras (test plan)
 **Stage:** MVP Plan v1.4 — Етап 2 (тижні 3-7)
 **Closes:** L-001 … L-006 з `docs/specs/v2_known_limitations.md`
+
+---
+
+## Changelog v0.2 → v0.3
+
+- **EIP-712 typed signing layer implemented** — submitProof тепер verifies P-256 signature над EIP-712 digest замість сирого payloadHash. Захист від cross-chain, cross-contract і cross-function replay
+  - Нові константи: `EIP712_DOMAIN_TYPEHASH`, `ENERGY_PROOF_TYPEHASH`, `DOMAIN_NAME_HASH`, `DOMAIN_VERSION_HASH`
+  - Domain: `name="InfraVeritas Energy"`, `version="1"` (стабільні через апгрейди)
+  - Storage: `__gap[49]` → `__gap[47]`, додано `_cachedDomainSeparator` + `_cachedChainId` (upgrade-safe декремент)
+  - Нова admin функція: `reinitializeEIP712()` з `reinitializer(2)` для існуючих proxy після upgradeTo()
+  - Нові public view: `domainSeparator()`, `eip712Digest(PublicInputs)` — для off-chain cross-check
+  - Lazy rebuild domain separator при зміні chainId (chain fork protection)
+- **CHECK 2 у submitProof оновлено:** тепер `IP256Verifier.verify(_eip712Digest(pubInputs), r, s, pubKeyX, pubKeyY)` замість `verify(payloadHash, ...)`. Підпис тепер над структурованим digest, не сирим хешем
+- **Новий event:** `DomainSeparatorCached(uint256 indexed chainId, bytes32 domainSeparator)` — emit на initialize і reinitializeEIP712
+- **Test suite extended** — новий `contracts/test/V3_EIP712.t.sol` (246 рядків, 12 тестів)
+  - Domain separator computation + chain fork lazy rebuild
+  - EIP-712 digest binding до chainId і verifyingContract (replay protection)
+  - Reinitializer idempotency + access control
+  - Event emission `DomainSeparatorCached`
+  - Regression — happy path submitProof все ще працює через mock layer
+- **Regression confirmed clean:**
+  - forge test: 114/114 pass (102 existing + 12 new)
+  - Slither: 0 findings (94 detectors, 23 contracts)
+  - Echidna smoke 10K: 5/5 invariants passing, 6429 unique instructions
+  - Foundry invariant #4, #7: 256K calls, 0 violations
+- **§1 і §19 Deferred items закрито:** EIP-712 typed signing (тиждень 5), Echidna invariant testing (тиждень 7)
+- **Sepolia deployment не виконано у цьому commit** — потребує синхронізованого update `edge/hal/signing.py` + `sepolia_smoke.py` перед `upgradeTo()` на існуючий proxy `0xf21d900e43214b0abf489f8d6862352aabb09da3`
 
 ---
 
@@ -34,12 +61,11 @@
 - L-005 — DeviceRegistry окремий контракт
 - L-006 — P256Verifier wrapper
 - HonkVerifier wrapper (новий, паралельний до L-006 pattern)
+- EIP-712 typed signing layer (додано у v0.3)
 
 **Deferred у наступні тижні Етапу 2:**
-- EIP-712 typed signing (тиждень 5)
 - Per-device rate limit on-chain (тиждень 5)
 - UUPS proxy concrete setup і tests (тиждень 6)
-- Echidna invariant testing (тиждень 7)
 
 **Не у скоупі взагалі (інші етапи):**
 - ZK v08 circuit implementation (Етап 3, Олександр)
@@ -70,7 +96,7 @@
 
 **Inter-contract calls у submitProof:**
 - `DeviceRegistry.isAuthorized(devicePubkey)` — view, ~3K gas
-- `P256Verifier.verify(payloadHash, signature, devicePubkey)` — view, ~300-400K gas (Daimo або FCL)
+- `P256Verifier.verify(eip712Digest, signature, devicePubkey)` — view, ~300-400K gas (Daimo або FCL). v0.3: signature now over EIP-712 typed digest, не raw payloadHash.
 - `HonkVerifier.verify(proof, publicInputs)` — view, ~200-300K gas (auto-generated UltraHonk)
 
 **Чому окремі контракти:**
@@ -134,6 +160,77 @@ Architecture.docx Layer 6 і Plan v1.3 §3.1 описували "PZEM-016 на D
 **Setter:** `setHonkVerifier(address)` — `onlyRole(DEFAULT_ADMIN_ROLE)`.
 **Interface:** `IHonkVerifier.verify(bytes proof, bytes32[] publicInputs) → bool`.
 
+### 3.4 EIP-712 typed signing layer (added 2026-05-17, v0.3)
+
+**Decision:** P-256 підпис у submitProof тепер verifies над **EIP-712 typed digest** (per EIP-712 standard), не над сирим `payloadHash`.
+
+**Why:**
+- Сирий `payloadHash` сам по собі не binds підпис до конкретної мережі або контракту
+- Зловмисник зі скопійованим signature може повторно подати proof на іншому ланцюгу або у V4/інший контракт з тим самим API
+- EIP-712 digest binds підпис до `(chainId, verifyingContract, structured struct fields)` → block cross-chain, cross-contract, cross-function replay
+- Industry standard для structured signing у Web3
+
+**EIP-712 EnergyProof struct type:**
+
+```
+EnergyProof(
+    uint64 deviceId,
+    uint64 sessionId,
+    uint64 epochStartTs,
+    int64 lat_e7,
+    int64 lon_e7,
+    uint64 lightLevel,
+    uint64 tamperFlag,
+    bytes32 payloadHash,
+    uint64 totalEnergyMWh
+)
+```
+
+Field order MUST match `PublicInputs` struct exactly. Зміна struct fields = regenerate `ENERGY_PROOF_TYPEHASH`.
+
+**Domain:**
+- `name = "InfraVeritas Energy"` (без `V3` суфіксу — стабільне через апгрейди)
+- `version = "1"`
+- `chainId` = `block.chainid` (binding to current chain)
+- `verifyingContract` = `address(this)` (binding to this proxy address)
+
+**Digest formula:**
+```
+domainSeparator = keccak256(abi.encode(
+    EIP712_DOMAIN_TYPEHASH,
+    keccak256("InfraVeritas Energy"),
+    keccak256("1"),
+    block.chainid,
+    address(this)
+))
+
+structHash = keccak256(abi.encode(
+    ENERGY_PROOF_TYPEHASH,
+    pi.deviceId, pi.sessionId, pi.epochStartTs,
+    pi.lat_e7, pi.lon_e7,
+    pi.lightLevel, pi.tamperFlag,
+    pi.payloadHash, pi.totalEnergyMWh
+))
+
+digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash))
+```
+
+**Upgrade safety:**
+- Storage `__gap[49]` → `__gap[47]`: 2 нові слоти (`_cachedDomainSeparator`, `_cachedChainId`)
+- `initialize()` caches domain separator на свіжому deploy
+- `reinitializeEIP712()` з `reinitializer(2)` — для існуючих proxy після `upgradeTo()`. Без виклику цієї функції контракт продовжує працювати (`domainSeparator()` lazy-rebuilds), але платить rebuild gas на кожен виклик
+- При зміні `block.chainid` (chain fork) `domainSeparator()` lazy-rebuild на read
+
+**Off-chain implications:**
+- Edge firmware (`edge/hal/signing.py`) MUST sign `_eip712Digest(pubInputs)`, не `payloadHash`
+- Edge мусить знати всі 9 полів `PublicInputs`, включно з `totalEnergyMWh`, перш ніж підписувати
+- Aggregator може re-compute digest для cross-validation through `eip712Digest()` view function
+
+**Cross-chain replay protection example:**
+- Sepolia chainId = 11155111 → digest_sepolia
+- Mainnet chainId = 1 → digest_mainnet
+- digest_sepolia ≠ digest_mainnet навіть з ідентичним struct → підпис non-portable
+
 ---
 
 ## 4. L-001: AccessControl
@@ -159,6 +256,7 @@ V2 мав ownership pattern (single owner address). V3 переходить на
 | `setDeviceRegistry` | `DEFAULT_ADMIN_ROLE` |
 | `setP256Verifier` | `DEFAULT_ADMIN_ROLE` |
 | `setHonkVerifier` | `DEFAULT_ADMIN_ROLE` |
+| `reinitializeEIP712` | `DEFAULT_ADMIN_ROLE` (v0.3) |
 | `_authorizeUpgrade` | `UPGRADER_ROLE` |
 
 **Asymmetric pause/unpause:** швидка пауза при загрозі (PAUSER), обережне відновлення (DEFAULT_ADMIN_ROLE). Стандартний OZ pattern.
@@ -312,6 +410,8 @@ interface IP256Verifier {
 **Setter:** `setP256Verifier(address)` — `onlyRole(DEFAULT_ADMIN_ROLE)`.
 **Event:** `P256VerifierChanged(address indexed oldVerifier, address indexed newVerifier)`.
 
+**v0.3 note:** `messageHash` argument тепер EIP-712 digest, не сирий Poseidon `payloadHash`. P256Verifier interface не змінюється — він hash-agnostic, тільки verifies signature над provided 32-byte hash.
+
 ---
 
 ## 10. HonkVerifier wrapper
@@ -364,7 +464,7 @@ Field order і encoding **MUST match** Noir circuit public output order. Verify 
 
 ---
 
-## 11. submitProof flow (Architecture target + V3 gap-checking)
+## 11. submitProof flow (Architecture target + V3 gap-checking + EIP-712 v0.3)
 
 **Function signature:**
 
@@ -372,7 +472,7 @@ Field order і encoding **MUST match** Noir circuit public output order. Verify 
 function submitProof(
     PublicInputs calldata pubInputs,
     bytes32 payloadHash,
-    bytes calldata signature,     // 64 bytes P-256 (r || s)
+    bytes calldata signature,     // 64 bytes P-256 (r || s) над EIP-712 digest (v0.3)
     bytes calldata devicePubkey,  // 64 bytes uncompressed (X || Y)
     bytes calldata proof          // ~440 bytes UltraHonk
 ) external whenNotPaused nonReentrant onlyRole(OPERATOR_ROLE);
@@ -397,7 +497,7 @@ struct PublicInputs {
 **Семь перевірок у body:**
 
 1. **Device authorized** — `IDeviceRegistry(deviceRegistry).isAuthorized(devicePubkey)`. Revert `DeviceNotActive` якщо ні.
-2. **P-256 signature valid** — `IP256Verifier(p256Verifier).verify(payloadHash, r, s, pubKeyX, pubKeyY)`. Revert `InvalidP256Signature` якщо ні.
+2. **P-256 signature valid (EIP-712 typed, v0.3)** — `IP256Verifier(p256Verifier).verify(_eip712Digest(pubInputs), r, s, pubKeyX, pubKeyY)`. Підпис тепер над структурованим EIP-712 digest який binds (chainId, verifyingContract, struct fields), не над сирим payloadHash. Revert `InvalidP256Signature` якщо ні.
 3. **Hash consistency** — `pubInputs.payloadHash == payloadHash`. Revert `PayloadHashMismatch(expected, fromPubInputs)` якщо ні.
 4. **ZK proof valid** — `IHonkVerifier(honkVerifier).verify(proof, _encodePublicInputs(pubInputs))`. Revert `InvalidZKProof` якщо ні.
 5. **Session unique** — `sessionKey = keccak256(pubInputs.deviceId, pubInputs.sessionId); require(!usedSessionKeys[sessionKey])`. Revert `SessionKeyAlreadyUsed(sessionKey)`.
@@ -407,10 +507,10 @@ struct PublicInputs {
 **Order of checks** — від найдешевшого до найдорожчого (gas optimization для early revert):
 1. Cheap state checks (sessions, timestamps, hash consistency) — first
 2. External view call to DeviceRegistry — ~3K
-3. P256 signature verify — ~300-400K
+3. P256 signature verify (over EIP-712 digest) — ~300-400K
 4. ZK proof verify — ~200-300K (most expensive, last)
 
-**Trustless guarantee:** aggregator може лагати, бути compromised, втратити state — proof не пройде якщо хоч одна з 7 перевірок зламана.
+**Trustless guarantee:** aggregator може лагати, бути compromised, втратити state — proof не пройде якщо хоч одна з 7 перевірок зламана. v0.3 додає cross-chain і cross-contract replay protection через EIP-712 typed signing.
 
 ---
 
@@ -418,7 +518,7 @@ struct PublicInputs {
 
 V3 inherits multiple OZ upgradeable contracts. Користувацький storage йде після inherited.
 
-**Layout:**
+**Layout (v0.3):**
 
 ```
 // Inherited slots (managed by OZ — DO NOT TOUCH ORDER):
@@ -431,14 +531,16 @@ address public p256Verifier;
 address public honkVerifier;                                                // <-- added in v0.2
 mapping(bytes32 deviceId => uint64) public lastSubmissionTimestamp;
 mapping(bytes32 sessionKey => bool) public usedSessionKeys;
+bytes32 private _cachedDomainSeparator;                                     // <-- added in v0.3
+uint256 private _cachedChainId;                                             // <-- added in v0.3
 
 // Reserved gap for future versions:
-uint256[49] private __gap;                                                  // <-- was [50] in v0.1
+uint256[47] private __gap;                                                  // <-- was [49] in v0.2, [50] in v0.1
 ```
 
-**`__gap[49]` convention:**
-- 49 reserved slots = до 49 нових storage variables у V4, V5 без layout shifts
-- При додаванні нової variable у V4 — декрементуй gap (e.g., `uint256[48] __gap`)
+**`__gap[47]` convention:**
+- 47 reserved slots = до 47 нових storage variables у V4, V5 без layout shifts
+- При додаванні нової variable у V4 — декрементуй gap (e.g., `uint256[46] __gap`)
 
 **CRITICAL:**
 - НЕ змінювати порядок змінних у наступних версіях ПІСЛЯ deployment
@@ -446,6 +548,8 @@ uint256[49] private __gap;                                                  // <
 - Нові змінні — ТІЛЬКИ В КІНЕЦЬ, перед `__gap`
 
 **Pre-deployment changes (як зробили у v0.2):** safe — нікого не зачіпає бо нічого ще не deployed.
+
+**v0.3 upgrade-safe декремент:** Два нові слоти беруться з кінця попереднього `__gap[49]`. Існуючі deployed proxy: storage layout preserved. `_cachedDomainSeparator` і `_cachedChainId` починаються як 0 на existing proxy після `upgradeTo()` — `domainSeparator()` lazy-rebuilds на read до тих пір поки не виконано `reinitializeEIP712()`.
 
 ---
 
@@ -475,10 +579,16 @@ event HonkVerifierChanged(
     address indexed newVerifier
 );
 
+event DomainSeparatorCached(                                                // <-- added in v0.3
+    uint256 indexed chainId,
+    bytes32 domainSeparator
+);
+
 // Inherited:
 //   AccessControl: RoleGranted, RoleRevoked, RoleAdminChanged
 //   Pausable:      Paused, Unpaused
 //   UUPS:          Upgraded
+//   Initializable: Initialized
 ```
 
 ---
@@ -495,12 +605,15 @@ error InvalidP256Signature();
 error InvalidZKProof();
 error PayloadHashMismatch(bytes32 expected, bytes32 fromPubInputs);    // added v0.2
 error EpochInFuture(uint64 epochTs, uint64 blockTs);                   // added v0.2
+error InvalidSignatureLength(uint256 length);
+error InvalidPubkeyLength(uint256 length);
 error ZeroAddress();
 error SameAddress();
-error NotImplemented();   // tymchasowo, для skeleton stubs
 ```
 
-**Inherited (OZ v5):** `AccessControlUnauthorizedAccount`, `EnforcedPause`, `ReentrancyGuardReentrantCall`.
+**Inherited (OZ v5):** `AccessControlUnauthorizedAccount`, `EnforcedPause`, `ReentrancyGuardReentrantCall`, `InvalidInitialization` (для повторного `reinitializeEIP712`).
+
+**v0.3 note:** No new custom errors. `reinitializeEIP712` повторний виклик reverts через OZ `InvalidInitialization` з `Initializable`.
 
 ---
 
@@ -511,7 +624,7 @@ error NotImplemented();   // tymchasowo, для skeleton stubs
 - v0.2 patch (HonkVerifier wrapper added): **5,748 B** runtime
 - Delta from HonkVerifier integration: **+640 B**
 
-**Projected with submit body:**
+**Projected with submit body + EIP-712 layer (v0.3):**
 
 | Component | Est. B added |
 |---|---|
@@ -520,9 +633,10 @@ error NotImplemented();   // tymchasowo, для skeleton stubs
 | Gap-checking math + state updates | +300-500 |
 | Event emit | +50 |
 | Custom error data | +100-200 |
-| **Total projected V3 runtime** | **7,000 – 8,500 B** |
+| EIP-712 layer (typehashes, helpers, reinit, cached domain) (v0.3) | +500-700 |
+| **Total projected V3 runtime** | **7,500 – 9,200 B** |
 
-**Margin to 24 KB EVM ceiling:** ~16,000 B (~67% headroom).
+**Margin to 24 KB EVM ceiling:** ~15,000 B (~62% headroom).
 
 **Revises v0.1 estimate of 21-23 KB downward by 2-3x.** Original estimate was conservative without measuring. Bytecode growth risk (10.2 у v1.3 Plan) — **fact effectively no longer concerns us.**
 
@@ -532,13 +646,16 @@ error NotImplemented();   // tymchasowo, для skeleton stubs
 |---|---|
 | AccessControl + Pausable + Reentrancy | ~7K |
 | `DeviceRegistry.isAuthorized` external view | ~3K |
-| `P256Verifier.verify` | ~300-400K |
+| EIP-712 digest computation (cached domain) (v0.3) | ~3-5K |
+| `P256Verifier.verify` over EIP-712 digest | ~300-400K |
 | `HonkVerifier.verify` | ~200-300K |
 | `usedSessionKeys` SLOAD+SSTORE | ~22K |
 | `lastSubmissionTimestamp` SLOAD+SSTORE | ~7K |
 | Gap math + comparison | ~1K |
 | Event emit | ~3K |
 | **Rough total** | **~550K – 750K gas** |
+
+EIP-712 layer додає ~3-5K gas за один виклик (один extra keccak + кілька MLOAD з cached domain). Marginal impact.
 
 **Implications:**
 - Arbitrum @ 0.1 gwei → ~$0.10/submission. Viable.
@@ -558,6 +675,7 @@ test/V3_GapChecking.t.sol             (L-004)
 test/V3_DeviceRegistryIntegration.t.sol  (L-005)
 test/V3_P256VerifierIntegration.t.sol    (L-006)
 test/V3_HonkVerifierIntegration.t.sol    (HonkVerifier wrapper, new)
+test/V3_EIP712.t.sol                  (EIP-712 typed signing layer, added v0.3)
 test/V3_Integration.t.sol             (end-to-end, all together)
 test/DeviceRegistry.t.sol             (standalone)
 test/mocks/MockHonkVerifier.sol       (controllable verifier, always-true or selectable)
@@ -594,6 +712,15 @@ test/mocks/MaliciousVerifier.sol      (reentrancy attacker)
 - validProof (mock returns true), invalidProof (mock returns false)
 - swapVerifier, swapToZeroReverts
 
+**EIP-712 (v0.3):**
+- domainSeparator correct compute, lazy rebuild on chainid change
+- eip712Digest matches reference computation
+- digest changes with chainid, contract address, struct fields
+- reinitializeEIP712 callable once, then reverts (reinitializer pattern)
+- reinitializeEIP712 admin-only
+- DomainSeparatorCached event emission
+- submitProof regression — mocks layer happy path still passes
+
 **Integration:**
 - fullFlow — register device → submit proof → second submit with gap → events correct
 - 7-check order — each fails individually with correct error, no early return on wrong check
@@ -603,32 +730,41 @@ test/mocks/MaliciousVerifier.sol      (reentrancy attacker)
 
 ---
 
-## 17. Echidna invariants preview (for тиждень 7)
+## 17. Echidna invariants preview (для тиждень 7)
+
+Echidna harness implemented and exercised under sprint pre-audit closure (2026-05-17). Active invariants:
 
 ```
-invariant_submitCounterMonotonic:
-  ProofSubmitted events для deviceId — non-decreasing у часі
+echidna_counter_monotonic:
+  per-device submit count тільки зростає (#1)
 
-invariant_pausedMeansNoSubmit:
-  paused() == true → жоден ProofSubmitted event у тому ж блоці
+echidna_paused_blocks_submit:
+  paused() → жоден successful submit (#2)
 
-invariant_sessionKeyUnique:
-  for any sessionKey, максимум один ProofSubmitted event
+echidna_session_key_unique:
+  кожен sessionKey максимум один accepted submit (#3)
 
+echidna_non_operator_cannot_submit:
+  callers без OPERATOR_ROLE завжди revert (#5)
+
+echidna_timestamp_monotonic:
+  per-device timestamps strictly increasing (#6)
+```
+
+Forge invariants (`test/V3_Invariants.t.sol`):
+
+```
 invariant_postDisconnectionMatchesGap:
-  ProofSubmitted.gapFromPrevious > MAX_GAP_SECONDS → postDisconnection == true
+  ProofSubmitted.gapFromPrevious > MAX_GAP_SECONDS → postDisconnection == true (#4)
 
-invariant_nonOperatorCannotSubmit:
-  msg.sender без OPERATOR_ROLE → submitProof revert-ує завжди
-
-invariant_timestampMonotonicPerDevice:
-  для deviceId — ProofSubmitted.timestamp strictly increasing
-
-invariant_pubInputsHashConsistency:
-  emitted ProofSubmitted має pubInputs.payloadHash == submitted payloadHash
+invariant_payloadHashConsistency:
+  emitted ProofSubmitted потребує pi.payloadHash == param.payloadHash (#7)
 ```
 
-24-годинний прогон у тижні 7 per v1.3 plan.
+**Sprint results (2026-05-17):**
+- 24h Echidna run: 100,000,174 transactions, всі 5 invariants passing, 0 violations
+- Forge invariant: 256 runs × 500 depth × 2 invariants = 256K calls, 0 violations
+- v0.3 EIP-712 layer додано — re-run 10K smoke confirms all 5 echidna invariants still passing з оновленим контрактом
 
 ---
 
@@ -651,10 +787,10 @@ invariant_pubInputsHashConsistency:
 - Альтернатива: external Timelock у Етапі 8 multisig pattern
 - **Current default:** немає timelock у V3. Чекаємо Етап 8 для commits через Timelock Controller.
 
-**Q3. `__gap[49]` — sufficient?**
-- 49 slots = до 49 нових storage variables у V4-V5
-- Чи передбачаємо V4 з >49 новими полями? Якщо так — збільшити.
-- **Current default:** 49, OZ-recommended.
+**Q3. `__gap[47]` — sufficient?** (v0.3 — раніше було `__gap[49]`)
+- 47 slots = до 47 нових storage variables у V4-V5
+- Чи передбачаємо V4 з >47 новими полями? Якщо так — збільшити перед production
+- **Current default:** 47, OZ-recommended
 
 **Q4. DeviceRegistry — upgradeable чи non-upgradeable?**
 - **Current default:** non-upgradeable. Якщо bug — `setDeviceRegistry(newAddress)` у V3, але втрачаємо state.
@@ -668,6 +804,11 @@ invariant_pubInputsHashConsistency:
 - На scale 10K submissions/year × 20K gas SSTORE ≈ $2K/year submit cost
 - **Current default:** без TTL cap. Growth manageable.
 
+**Q10 (new v0.3). EIP-712 domain version policy.**
+- Поточний `version = "1"`. Якщо у майбутньому struct shape EnergyProof зміниться (нові поля) — версію треба bump на `"2"`, інакше підпис v1 формально valid для v2 struct
+- Stand-in рішення: документувати що зміна `PublicInputs` struct = bump `DOMAIN_VERSION_HASH` у constants + redeploy + reinitializeEIP712
+- **Current default:** version "1" жорстко captured у constant. Зміна = code change + redeploy.
+
 **Closed during testing (Тарас, 2026-05-13):**
 
 - **Q8 (L-003 Reentrancy: actual revert path)** — **CLOSED.** Всі external verifier interfaces (`IDeviceRegistry`, `IP256Verifier`, `IHonkVerifier`) declare consumed methods як `view`; Solidity emits `STATICCALL` що забороняє state-changing operations включаючи SSTORE при re-entry. Malicious verifier намагаючись re-enter `submitProof()` reverts at first SSTORE, не через `ReentrancyGuardReentrantCall`. Test file `V3_ReentrancyGuard.t.sol` використовує `vm.expectRevert()` без selector. `nonReentrant` modifier remains як defense-in-depth для future non-view verifier interfaces.
@@ -680,11 +821,13 @@ invariant_pubInputsHashConsistency:
 
 | Item | Тиждень | Чому не зараз |
 |---|---|---|
-| EIP-712 typed signing | 5 | Polish, не core security |
 | Per-device rate limit on-chain | 5 | Зараз rate limit у aggregator достатньо |
 | UUPS proxy deployment scripts | 6 | Окрема робота, не у scope design |
-| Echidna invariant testing setup | 7 | Preview у §17, повна setup пізніше |
 | OZ v5.0.2 → v5.2.0 для ReentrancyGuardTransient | Pre-mainnet (Phase 11) | $1-2K/year gas saving не varta swap на менш battle-tested код під час dev |
+
+**Items closed since v0.2:**
+- ~~EIP-712 typed signing~~ → implemented у v0.3 (see §3.4)
+- ~~Echidna invariant testing setup~~ → implemented у sprint pre-audit closure (see §17)
 
 ---
 
@@ -694,15 +837,17 @@ invariant_pubInputsHashConsistency:
 2. ✅ OZ-upgradeable v5.0.2 dependency installed (53df18d)
 3. ✅ V3 skeleton committed (53df18d)
 4. ✅ V3 patch — HonkVerifier wrapper + PublicInputs struct (09652b9)
-5. ✅ V3 design v0.2 — this document
-6. ⏳ submitProof body implementation (week 4 work, ~1.5-2 hours)
-7. ⏳ MockHonkVerifier, MockP256Verifier, MockDeviceRegistry for unit tests
-8. ⏳ Foundry tests per §16 plan (Тарас, паралельно)
-9. ⏳ Олександр review of §18 open questions Q1-Q5, Q7 (async)
+5. ✅ V3 design v0.2 committed
+6. ✅ submitProof body implementation (Етап 2 тиждень 4)
+7. ✅ Mocks + Foundry tests per §16 plan (Тарас)
+8. ✅ V3 design v0.3 — this document (EIP-712 typed signing)
+9. ⏳ Edge firmware (`edge/hal/signing.py`) + `sepolia_smoke.py` update для EIP-712 (наступний sprint)
+10. ⏳ Sepolia proxy `upgradeTo()` + `reinitializeEIP712()` (після edge sync)
+11. ⏳ Олександр review of §18 open questions Q1-Q5, Q7, Q10 (async)
 
 ---
 
-**Кінець V3 design v0.2.**
+**Кінець V3 design v0.3.**
 
 
 ### Q8 — L-003 Reentrancy: actual revert path (added 2026-05-12)
