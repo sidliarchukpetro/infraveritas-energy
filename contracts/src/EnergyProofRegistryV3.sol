@@ -337,7 +337,7 @@ contract EnergyProofRegistryV3 is
         //   - cross-chain replay (same payload+sig on Sepolia vs mainnet)
         //   - cross-contract replay (same payload+sig on V3 vs V4)
         //   - cross-function replay (same sig used for a different function)
-        bytes32 digest = _eip712Digest(pubInputs);
+        bytes32 digest = payloadHash;  // v0.3.1 revert: circuit constraint requires sig over Poseidon payloadHash
         bytes32 r;
         bytes32 s;
         bytes32 pubKeyX;

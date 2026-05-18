@@ -3,11 +3,6 @@
 Critical test: `test_wire_format_matches_server_schema` — verifies that the
 JSON body produced by the edge client EXACTLY matches the aggregator's zod
 schema. Any drift between edge encoding and server parsing breaks production.
-
-v0.3 (2026-05-17): AggregatorClient now requires v3_address + chain_id
-keyword args for EIP-712 typed signing domain. All test constructors
-updated to pass placeholder values — tests are mock-based, so the actual
-chain/address values don't affect business logic, only that they're present.
 """
 
 import json
@@ -24,23 +19,6 @@ from network.client import (
 )
 
 AGGREGATOR_URL = "https://aggregator.example.com"
-
-# Test constants for EIP-712 typed signing (v0.3+).
-# These are placeholder values — tests are HTTP-mock based, so the actual
-# chain/address values don't reach a real chain. They only need to be present
-# for AggregatorClient constructor and for digest computation determinism.
-TEST_V3_ADDRESS = "0x" + "11" * 20  # 0x1111...1111
-TEST_CHAIN_ID = 31337  # anvil/foundry default
-
-
-def _make_client(signer: P256Signer | None = None) -> AggregatorClient:
-    """Test fixture — AggregatorClient with EIP-712 domain params populated."""
-    return AggregatorClient(
-        AGGREGATOR_URL,
-        signer or P256Signer(),
-        v3_address=TEST_V3_ADDRESS,
-        chain_id=TEST_CHAIN_ID,
-    )
 
 
 def _make_payload(session_id: int = 1) -> CanonicalPayload:
@@ -77,7 +55,7 @@ def test_submit_returns_session_key_on_202():
         )
     )
 
-    with _make_client() as client:
+    with AggregatorClient(AGGREGATOR_URL, P256Signer()) as client:
         response = client.submit(_make_payload())
 
     assert isinstance(response, SubmissionResponse)
@@ -100,7 +78,7 @@ def test_submit_raises_on_400_validation_error():
         )
     )
 
-    with _make_client() as client:
+    with AggregatorClient(AGGREGATOR_URL, P256Signer()) as client:
         with pytest.raises(SubmissionRejected) as exc:
             client.submit(_make_payload())
 
@@ -120,7 +98,7 @@ def test_submit_raises_on_409_duplicate():
         )
     )
 
-    with _make_client() as client:
+    with AggregatorClient(AGGREGATOR_URL, P256Signer()) as client:
         with pytest.raises(SubmissionRejected) as exc:
             client.submit(_make_payload())
 
@@ -145,7 +123,7 @@ def test_get_status_returns_record():
         )
     )
 
-    with _make_client() as client:
+    with AggregatorClient(AGGREGATOR_URL, P256Signer()) as client:
         status = client.get_status(session_key)
 
     assert status.status == "complete"
@@ -160,7 +138,7 @@ def test_get_status_404_raises_not_found():
         return_value=Response(404, json={"error": "NotFound"})
     )
 
-    with _make_client() as client:
+    with AggregatorClient(AGGREGATOR_URL, P256Signer()) as client:
         with pytest.raises(SubmissionRejected) as exc:
             client.get_status(session_key)
 
@@ -181,7 +159,7 @@ def test_health_returns_queue_stats():
         )
     )
 
-    with _make_client() as client:
+    with AggregatorClient(AGGREGATOR_URL, P256Signer()) as client:
         health = client.health()
 
     assert health["status"] == "ok"
@@ -205,7 +183,7 @@ def test_wire_format_matches_server_schema():
 
     respx.post(f"{AGGREGATOR_URL}/submissions").mock(side_effect=capture)
 
-    with _make_client() as client:
+    with AggregatorClient(AGGREGATOR_URL, P256Signer()) as client:
         client.submit(_make_payload())
 
     assert len(captured) == 1
@@ -255,7 +233,7 @@ def test_invalid_signature_length_raises():
         def sign(self, message_hash: bytes) -> bytes:
             return b"\x00" * 32  # wrong length
 
-    with _make_client(signer=BadSigner()) as client:
+    with AggregatorClient(AGGREGATOR_URL, BadSigner()) as client:
         with pytest.raises(ValueError, match="64-byte signature"):
             client.submit(_make_payload())
 
@@ -287,7 +265,7 @@ def test_negative_int64_encodes_correctly():
 
     respx.post(f"{AGGREGATOR_URL}/submissions").mock(side_effect=capture)
 
-    with _make_client() as client:
+    with AggregatorClient(AGGREGATOR_URL, P256Signer()) as client:
         client.submit(payload)
 
     body = json.loads(captured[0])
