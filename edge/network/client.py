@@ -5,6 +5,20 @@ This module is the single source of truth on the edge side for HTTP transport;
 the HAL layer (edge/hal/) only knows how to measure and sign — it has no idea
 where bytes go.
 
+v0.3 signing change (2026-05-17):
+  Edge now signs an EIP-712 typed digest, not the raw Poseidon payloadHash.
+  This binds the signature to (chainId, verifyingContract, struct fields) —
+  prevents cross-chain, cross-contract, and cross-function replay.
+
+  Edge MUST be configured with v3_address + chain_id at AggregatorClient
+  construction time so the EIP-712 domain separator matches what V3.sol
+  computes on-chain.
+
+  The wire format itself is UNCHANGED — aggregator continues to compute
+  totalEnergyMWh from readings using the same formula (mirrored in
+  hal.eip712.compute_total_energy_mwh). If formulas diverge, V3 reverts
+  with InvalidP256Signature on submission.
+
 Critical wire-format rules (must match server.ts exactly):
   - All uint64/int64 fields encoded as decimal strings (JSON numbers unsafe
     past 2^53; uint64 max is 2^64-1).
@@ -21,7 +35,12 @@ Example:
     from edge.network.client import AggregatorClient
 
     signer = P256Signer()  # production: HSM-backed
-    with AggregatorClient("https://aggregator.example.com", signer) as client:
+    with AggregatorClient(
+        "https://aggregator.example.com",
+        signer,
+        v3_address="0xf21d900e43214b0abf489f8d6862352aabb09da3",
+        chain_id=11155111,  # Sepolia
+    ) as client:
         response = client.submit(payload)
         status = client.get_status(response.session_key)
 """
@@ -34,6 +53,11 @@ import httpx
 
 from hal.canonical import compute_payload_hash
 from hal.edge_device import CanonicalPayload
+from hal.eip712 import (
+    PublicInputs as EIP712PublicInputs,
+    compute_eip712_digest,
+    compute_total_energy_mwh,
+)
 from hal.signing import P256Signer
 
 
@@ -87,6 +111,10 @@ class AggregatorClient:
 
     Thread-safety: one client instance per thread. The underlying httpx.Client
     pools connections — reuse the same instance for many submissions.
+
+    v0.3+: v3_address and chain_id are REQUIRED for EIP-712 signing. The
+    edge cannot sign valid submissions without knowing which V3 contract
+    on which chain the signature must be bound to.
     """
 
     def __init__(
@@ -94,6 +122,8 @@ class AggregatorClient:
         base_url: str,
         signer: P256Signer,
         *,
+        v3_address: str,
+        chain_id: int,
         timeout_s: float = 30.0,
         verify_ssl: bool = True,
         ca_bundle: Optional[str] = None,
@@ -102,6 +132,12 @@ class AggregatorClient:
         Args:
             base_url: aggregator HTTPS endpoint (e.g. "https://api.infraveritas.pro")
             signer: P-256 signer instance (production: HSM-backed)
+            v3_address: V3 contract address (0x-prefixed, 40 hex). Used to
+                build EIP-712 domain separator. MUST match the V3 deployment
+                that the aggregator submits to.
+            chain_id: Target chain ID (e.g. 11155111 for Sepolia, 1 for mainnet).
+                Used in EIP-712 domain separator. MUST match the chain the
+                aggregator targets.
             timeout_s: per-request HTTP timeout (default 30s)
             verify_ssl: verify server TLS cert (default True; disable only for
                         self-signed dev — NEVER in production)
@@ -109,6 +145,8 @@ class AggregatorClient:
         """
         self.base_url = base_url.rstrip("/")
         self.signer = signer
+        self.v3_address = v3_address
+        self.chain_id = chain_id
 
         verify: Union[bool, str] = ca_bundle if ca_bundle else verify_ssl
         self._client = httpx.Client(
@@ -123,7 +161,19 @@ class AggregatorClient:
     # ---------- Public API ----------
 
     def submit(self, payload: CanonicalPayload) -> SubmissionResponse:
-        """Sign payload (Poseidon hash → P-256 sig) and submit to aggregator.
+        """Sign payload (Poseidon + EIP-712 digest → P-256 sig) and submit.
+
+        Signing flow (v0.3+):
+          1. Compute Poseidon payloadHash from canonical bytes (unchanged)
+          2. Compute totalEnergyMWh from readings (mirrors aggregator formula)
+          3. Build PublicInputs bundle (all 9 fields)
+          4. Compute EIP-712 digest binding (chainId, verifyingContract, struct)
+          5. Sign digest with P-256 key
+
+        The aggregator continues to compute totalEnergyMWh from readings
+        independently and submits on-chain. V3 recomputes the digest from
+        submitted PublicInputs and verifies signature — edge and aggregator
+        formulas MUST match or V3 reverts with InvalidP256Signature.
 
         Returns:
             SubmissionResponse on 202 Accepted (queued for processing).
@@ -132,9 +182,34 @@ class AggregatorClient:
             SubmissionRejected: aggregator rejected (400 validation, 409 duplicate).
             httpx.HTTPError: network/transport failure (timeout, DNS, TLS error).
         """
+        # 1. Poseidon hash of canonical payload (committed inside ZK circuit)
         payload_hash = compute_payload_hash(payload)
-        signature = self.signer.sign(payload_hash)
 
+        # 2. Total energy — same formula as aggregator computeTotalEnergy()
+        total_energy_mwh = compute_total_energy_mwh(payload.readings)
+
+        # 3. Build EIP-712 PublicInputs bundle (matches V3.sol struct)
+        pub_inputs = EIP712PublicInputs(
+            deviceId=payload.device_id,
+            sessionId=payload.session_id,
+            epochStartTs=payload.epoch_start_ts,
+            lat_e7=payload.lat_e7,
+            lon_e7=payload.lon_e7,
+            lightLevel=payload.light_level,
+            tamperFlag=payload.tamper_flag,
+            payloadHash=payload_hash,
+            totalEnergyMWh=total_energy_mwh,
+        )
+
+        # 4. EIP-712 digest binding to (chainId, V3 address, struct fields)
+        digest = compute_eip712_digest(
+            pub_inputs, self.chain_id, self.v3_address
+        )
+
+        # 5. Sign digest (not raw payload_hash — that was v0.2 behavior)
+        signature = self.signer.sign(digest)
+
+        # 6. Encode and POST (wire format unchanged from v0.2)
         body = self._encode_request(payload, signature, self.signer.public_key)
         url = urljoin(self.base_url + "/", "submissions")
 
@@ -216,7 +291,7 @@ class AggregatorClient:
     ) -> dict:
         """Encode payload+sig+pubkey into wire JSON.
 
-        Wire format per aggregator/src/api/server.ts zod schema:
+        Wire format per aggregator/src/api/server.ts zod schema (UNCHANGED in v0.3):
           - All numeric fields as decimal strings (int → str preserves uint64)
           - signature, public_key as lowercase hex (no 0x prefix, 128 chars each)
           - readings: exactly 100 items
