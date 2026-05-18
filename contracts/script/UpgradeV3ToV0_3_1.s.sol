@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {Script, console} from "forge-std/Script.sol";
 import {EnergyProofRegistryV3} from "../src/EnergyProofRegistryV3.sol";
 
-/// @title UpgradeV3ToV0_3_1 — Sepolia revert script (v0.3 → v0.3.1)
+/// @title UpgradeV3ToV0_3_1 - Sepolia revert script (v0.3 → v0.3.1)
 ///
 /// @notice Deploys new V3 implementation with CHECK 2 reverted to verify
 ///         signature over Poseidon payloadHash (instead of EIP-712 digest).
@@ -16,7 +16,7 @@ import {EnergyProofRegistryV3} from "../src/EnergyProofRegistryV3.sol";
 ///
 ///         EIP-712 infrastructure (domainSeparator, eip712Digest view,
 ///         reinitializer) RETAINED for future signed-message features
-///         (admin operations, off-chain orders). No reinit needed —
+///         (admin operations, off-chain orders). No reinit needed -
 ///         EIP-712 cache from v0.3 still valid.
 ///
 /// @dev Caller MUST have UPGRADER_ROLE on the proxy (operator EOA on Sepolia).
@@ -71,20 +71,20 @@ contract UpgradeV3ToV0_3_1 is Script {
         console.log("New impl address:");
         console.logAddress(address(newImpl));
 
-        // ---- Step 2: upgrade proxy (no reinit — EIP-712 cache from v0.3 still valid) ----
+        // ---- Step 2: upgrade proxy (no reinit - EIP-712 cache from v0.3 still valid) ----
 
         EnergyProofRegistryV3(V3_PROXY).upgradeToAndCall(
             address(newImpl),
-            ""  // empty calldata — just swap impl, no reinit needed
+            ""  // empty calldata - just swap impl, no reinit needed
         );
 
         console.log("");
         console.log("=== Step 2: Proxy upgraded ===");
-        console.log("(No reinit needed — EIP-712 cache from v0.3 still valid)");
+        console.log("(No reinit needed - EIP-712 cache from v0.3 still valid)");
 
         // ---- Step 3: verify post-upgrade state ----
 
-        // domainSeparator must still work — infrastructure retained
+        // domainSeparator must still work - infrastructure retained
         bytes32 separator = EnergyProofRegistryV3(V3_PROXY).domainSeparator();
 
         console.log("");
@@ -108,7 +108,7 @@ contract UpgradeV3ToV0_3_1 is Script {
         console.log("New impl (v0.3.1):");
         console.logAddress(postUpgradeImpl);
         console.log("");
-        console.log("Signature now verified over payloadHash (Poseidon) — matches");
+        console.log("Signature now verified over payloadHash (Poseidon) - matches");
         console.log("circuit and aggregator pre-check. EIP-712 infra retained but");
         console.log("unused for submitProof signature.");
         console.log("");
