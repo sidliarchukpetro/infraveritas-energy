@@ -17,16 +17,16 @@ import sys
 import time
 
 from hal.edge_device import CanonicalPayload, Reading
+from hal import ina226
 from hal.signing_atecc import ATECCSigner
 from network.client import AggregatorClient, SubmissionRejected
 
 
 def make_payload(session_id: int, epoch_start_ts: int) -> CanonicalPayload:
     """Identical to sepolia_smoke.make_payload — proven to pass the circuit."""
-    readings = tuple(
-        Reading(voltage_mv=5500 + i, current_ma=240 + i, timestamp_ms=1000 + i * 100)
-        for i in range(100)
-    )
+    print("=== INA226: sampling 100 real readings, 10 Hz x 10 s ===")
+    readings = ina226.collect_readings(100, 10.0)
+    print(f"  first: {readings[0].voltage_mv} mV / {readings[0].current_ma} mA")
     return CanonicalPayload(
         device_id=43,
         session_id=session_id,
