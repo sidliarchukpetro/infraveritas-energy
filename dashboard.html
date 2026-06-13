@@ -5,13 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>InfraVeritas Energy Protocol</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.11.0/dist/tabler-icons.min.css">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon-180.png">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--green:#00e676;--blue:#4fc3f7;--purple:#ce93d8;--bg:#080c12;--bg2:#0d1520;--bg3:#111b27;--border:#1a2840;--text:#e2e8f0;--muted:#4a6080}
 body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;min-height:100vh}
 .db{padding:20px;max-width:1100px;margin:0 auto}
 
-.hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--bg2);border:0.5px solid var(--border);border-radius:10px;margin-bottom:16px}
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--bg2);border:0.5px solid var(--border);border-radius:10px;margin-bottom:16px;flex-wrap:wrap;gap:12px}
 .hdr-left{display:flex;align-items:center;gap:14px}
 .pulse{width:10px;height:10px;border-radius:50%;background:var(--green);animation:glow 2s infinite;flex-shrink:0}
 @keyframes glow{0%,100%{box-shadow:0 0 4px var(--green)}50%{box-shadow:0 0 14px var(--green),0 0 20px var(--green)}}
@@ -21,6 +23,10 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .contracts{display:flex;gap:10px}
 .clink{font-size:11px;color:var(--blue);cursor:pointer;display:flex;align-items:center;gap:5px;padding:4px 10px;border:0.5px solid #4fc3f722;border-radius:6px;text-decoration:none;transition:background .2s}
 .clink:hover{background:#4fc3f712}
+.hdr-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.hdr-clock{text-align:right;font-family:'Courier New',monospace;line-height:1.25}
+.clock-time{font-size:18px;font-weight:600;color:var(--text);letter-spacing:1px}
+.clock-date{font-size:11px;color:var(--muted);letter-spacing:.5px}
 
 .mode-banner{padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:12px;display:flex;align-items:center;gap:10px}
 .mode-banner.live{background:#00e67610;border:0.5px solid #00e67644;color:#4ade80}
@@ -78,11 +84,12 @@ td{padding:10px 14px;border-bottom:0.5px solid var(--border);font-size:12px}
 tr:last-child td{border-bottom:none}
 tr.new-row td{animation:rowIn .6s ease}
 tr.post-disc td{background:#f59e0b0a}
+tr.anomaly-row td{background:#ef53500e}
 @keyframes rowIn{from{background:#00e67614}to{background:transparent}}
 .dot-ok{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 5px var(--green)}
 .dot-pend{display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;animation:pglow 1s infinite}
 @keyframes pglow{0%,100%{box-shadow:0 0 3px #f59e0b}50%{box-shadow:0 0 10px #f59e0b}}
-.shield{display:inflex;align-items:center;gap:4px;color:var(--green);font-size:11px}
+.shield{display:inline-flex;align-items:center;gap:4px;color:var(--green);font-size:11px}
 .tag-postdisc{display:inline-block;padding:2px 8px;font-size:10px;background:#f59e0b22;color:#fbbf24;border:0.5px solid #f59e0b44;border-radius:4px;margin-left:6px}
 .txlink{color:var(--blue);cursor:pointer;font-family:monospace;font-size:11px;text-decoration:none}
 .txlink:hover{text-decoration:underline}
@@ -98,19 +105,26 @@ tr.post-disc td{background:#f59e0b0a}
 
 <div class="hdr">
   <div class="hdr-left">
+    <img src="iv-shield-white.png" alt="InfraVeritas" style="height:30px;width:auto;flex-shrink:0">
     <div class="pulse"></div>
     <div>
       <div class="brand">Infra<span>Veritas</span> Energy Protocol</div>
     </div>
     <div class="net-badge">● Live · Sepolia Testnet</div>
   </div>
-  <div class="contracts">
-    <a class="clink" href="https://sepolia.etherscan.io/address/0xf21d900e43214b0abf489f8d6862352aabb09da3" target="_blank">
-      <i class="ti ti-database"></i> EnergyProofRegistry
-    </a>
-    <a class="clink" href="https://sepolia.etherscan.io/address/0xAaEaEDA7e14966a2B69c276e20190316990c08Fc" target="_blank">
-      <i class="ti ti-shield-check"></i> HonkVerifier
-    </a>
+  <div class="hdr-right">
+    <div class="hdr-clock">
+      <div class="clock-time" id="utc-time">--:--:--</div>
+      <div class="clock-date" id="utc-date">—</div>
+    </div>
+    <div class="contracts">
+      <a class="clink" href="https://sepolia.etherscan.io/address/0xf21d900e43214b0abf489f8d6862352aabb09da3" target="_blank">
+        <i class="ti ti-database"></i> EnergyProofRegistry
+      </a>
+      <a class="clink" href="https://sepolia.etherscan.io/address/0xAaEaEDA7e14966a2B69c276e20190316990c08Fc" target="_blank">
+        <i class="ti ti-shield-check"></i> HonkVerifier
+      </a>
+    </div>
   </div>
 </div>
 
@@ -197,16 +211,17 @@ tr.post-disc td{background:#f59e0b0a}
   <thead>
     <tr>
       <th>Status</th>
-      <th>Time</th>
+      <th>Time (UTC)</th>
       <th>Device</th>
       <th>Energy</th>
+      <th>Weather check</th>
       <th>ZK Proof</th>
       <th>Ethereum Tx</th>
       <th>Block</th>
     </tr>
   </thead>
   <tbody id="tx-body">
-    <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Loading...</td></tr>
+    <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">Loading...</td></tr>
   </tbody>
 </table>
 
@@ -373,6 +388,82 @@ async function fetchPublic() {
 }
 
 // ============================================================
+// Enrichment — read energy + lat/lon/time straight from the on-chain
+// submitProof calldata, then INDEPENDENTLY re-check solar radiance.
+// The subgraph indexes neither energy nor coordinates, so in public mode
+// we go to the calldata ourselves. Fully graceful: any failure (RPC down,
+// weather API down, unexpected calldata layout) leaves the row exactly as
+// the subgraph delivered it — no fake data, no broken feed.
+// ============================================================
+const SEPOLIA_RPC = 'https://ethereum-sepolia-rpc.publicnode.com';
+const CALLDATA_WORD = { epochStartTs: 2, latE7: 3, lonE7: 4, totalEnergy: 8 }; // 32-byte word index after the 4-byte selector (public inputs = leading static struct)
+const GHI_DARK = 10; // W/m² — below this the sky is effectively dark
+const enrichCache = new Map();
+
+function calldataWord(input, wordIndex) {
+  const start = 2 + 8 + wordIndex * 64;
+  return input.slice(start, start + 64);
+}
+function wordUint(hex) { return BigInt('0x' + hex); }
+function wordInt(hex) {
+  let v = BigInt('0x' + hex);
+  if (v >= (1n << 255n)) v -= (1n << 256n);
+  return v;
+}
+
+async function fetchCalldata(txHash) {
+  const r = await fetch(SEPOLIA_RPC, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getTransactionByHash', params: [txHash] }),
+  });
+  if (!r.ok) return null;
+  const j = await r.json();
+  return j.result?.input || null;
+}
+
+async function fetchGHI(lat, lon, ts) {
+  const hourUTC = new Date(ts * 1000).toISOString().slice(0, 13); // YYYY-MM-DDTHH
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&hourly=shortwave_radiation&past_days=92&forecast_days=1&timezone=UTC`;
+  const r = await fetch(url);
+  if (!r.ok) return null;
+  const j = await r.json();
+  const times = j.hourly?.time || [];
+  const rad = j.hourly?.shortwave_radiation || [];
+  const idx = times.findIndex(t => t.slice(0, 13) === hourUTC);
+  return idx >= 0 ? rad[idx] : null;
+}
+
+async function enrichSubmission(s) {
+  if (!s.txHash) return;
+  if (enrichCache.has(s.txHash)) { Object.assign(s, enrichCache.get(s.txHash)); return; }
+  const enr = { energyWh: s.energyWh ?? null, weather: 'unknown', ghi: null };
+  try {
+    const input = await fetchCalldata(s.txHash);
+    if (input && input.length >= 2 + 8 + 9 * 64) {
+      const eRaw = wordUint(calldataWord(input, CALLDATA_WORD.totalEnergy));
+      if (eRaw < 1000000000000000n) enr.energyWh = Number(eRaw) / 36e9; // raw Σ(mV·mA) → Wh
+      const lat = Number(wordInt(calldataWord(input, CALLDATA_WORD.latE7))) / 1e7;
+      const lon = Number(wordInt(calldataWord(input, CALLDATA_WORD.lonE7))) / 1e7;
+      const ts = Number(wordUint(calldataWord(input, CALLDATA_WORD.epochStartTs)));
+      if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && ts > 1e9 && ts < 4e9) {
+        const ghi = await fetchGHI(lat, lon, ts);
+        if (ghi !== null && ghi !== undefined) {
+          enr.ghi = ghi;
+          const claimsEnergy = enr.energyWh !== null && enr.energyWh > 0;
+          enr.weather = (claimsEnergy && ghi < GHI_DARK) ? 'anomaly' : 'ok';
+        }
+      }
+      console.log('[IV decode]', s.txHash.slice(0, 10), { energyWh: enr.energyWh, lat, lon, ts, ghi: enr.ghi, weather: enr.weather });
+    }
+  } catch (e) {
+    console.warn('[IV enrich] skipped', s.txHash?.slice(0, 10), e.message);
+  }
+  enrichCache.set(s.txHash, enr);
+  Object.assign(s, enr);
+}
+
+// ============================================================
 // Render — metrics
 // ============================================================
 function renderMetrics(metrics) {
@@ -434,29 +525,40 @@ function setPipelineStatic(latestSubmission, lastBlock) {
 function renderTable(submissions) {
   const body = document.getElementById('tx-body');
   if (!submissions || submissions.length === 0) {
-    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">No submissions yet.</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">No submissions yet.</td></tr>';
     return;
   }
 
   body.innerHTML = submissions.slice(0, 10).map((s, idx) => {
     const isNew = idx === 0 && mode === 'live' && submissions.length > lastSubmissionCount && lastSubmissionCount > 0;
-    const t = s.time.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const t = s.time.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
     const hash = s.txHash || '';
     const shortHash = hash ? hash.substring(0, 12) + '…' + hash.slice(-4) : '—';
     const dot = s.chainStatus === 'confirmed' ? '<span class="dot-ok"></span>' : '<span class="dot-pend"></span>';
     const ethLink = hash
       ? `<a class="txlink" href="https://sepolia.etherscan.io/tx/${hash}" target="_blank">${shortHash}</a>`
       : '<span style="color:var(--muted)">pending...</span>';
-    const energyDisplay = s.energyWh !== null ? s.energyWh.toFixed(1) + ' Wh' : '—';
+    const energyDisplay = (s.energyWh !== null && s.energyWh !== undefined)
+      ? (s.energyWh >= 1 ? s.energyWh.toFixed(2) + ' Wh' : (s.energyWh * 1000).toFixed(1) + ' mWh')
+      : '—';
+    let weatherCell;
+    if (s.weather === 'anomaly') {
+      weatherCell = `<span style="color:#ef5350;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-alert-triangle"></i> ${s.ghi != null ? Math.round(s.ghi) + ' W/m²' : 'anomaly'}</span>`;
+    } else if (s.weather === 'ok') {
+      weatherCell = `<span style="color:var(--green);display:inline-flex;align-items:center;gap:4px"><i class="ti ti-sun"></i> ${s.ghi != null ? Math.round(s.ghi) + ' W/m²' : 'consistent'}</span>`;
+    } else {
+      weatherCell = '<span style="color:var(--muted)">—</span>';
+    }
     const blockDisplay = s.blockNumber || (s.chainStatus === 'confirmed' ? 'on-chain' : '—');
     const postDiscTag = s.postDisconnection ? '<span class="tag-postdisc">post-disc</span>' : '';
-    const rowClass = [isNew ? 'new-row' : '', s.postDisconnection ? 'post-disc' : ''].filter(Boolean).join(' ');
+    const rowClass = [isNew ? 'new-row' : '', s.postDisconnection ? 'post-disc' : '', s.weather === 'anomaly' ? 'anomaly-row' : ''].filter(Boolean).join(' ');
 
     return `<tr class="${rowClass}">
       <td>${dot}</td>
       <td>${t}</td>
       <td>Device #${s.deviceId}${postDiscTag}</td>
       <td>${energyDisplay}</td>
+      <td>${weatherCell}</td>
       <td><span class="shield"><i class="ti ti-shield-check"></i> Valid</span></td>
       <td>${ethLink}</td>
       <td><span class="blk">${blockDisplay}</span></td>
@@ -472,6 +574,9 @@ async function fetchData() {
     const result = mode === 'live' ? await fetchLive() : await fetchPublic();
 
     renderMetrics(result.metrics);
+    if (mode === 'public') {
+      await Promise.all(result.submissions.slice(0, 10).map(enrichSubmission));
+    }
     renderTable(result.submissions);
 
     if (mode === 'live') {
@@ -485,7 +590,7 @@ async function fetchData() {
 
     lastSubmissionCount = result.submissions.length;
 
-    document.getElementById('ts').textContent = 'Updated: ' + new Date().toLocaleTimeString('uk-UA');
+    document.getElementById('ts').textContent = 'Updated: ' + new Date().toLocaleTimeString('en-GB', { hour12: false, timeZone: 'UTC' }) + ' UTC';
   } catch (e) {
     console.error('fetchData error:', e);
     const banner = document.getElementById('mode-banner');
@@ -493,6 +598,21 @@ async function fetchData() {
     document.getElementById('mode-text').innerHTML = '<b>Error</b> — ' + e.message;
   }
 }
+
+// ============================================================
+// Live UTC clock
+// ============================================================
+function tickClock() {
+  const now = new Date();
+  const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'UTC' });
+  const date = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const tEl = document.getElementById('utc-time');
+  const dEl = document.getElementById('utc-date');
+  if (tEl) tEl.textContent = time;
+  if (dEl) dEl.textContent = date + ' · UTC';
+}
+tickClock();
+setInterval(tickClock, 1000);
 
 // ============================================================
 // Boot
